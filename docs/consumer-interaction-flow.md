@@ -4,39 +4,58 @@ This document describes how an application team consumes the observability platf
 
 ## Summary
 
-The application team does not request dashboards, collectors, alarms, or cloud resources directly. Instead, it declares observability intent in an `ObservabilityContract`, validates that contract, generates a neutral plan, and consumes target-specific bindings produced by the platform.
+The application team does not request dashboards, collectors, alarms, or cloud resources directly. Instead, it declares observability intent in an `ObservabilityContract` and consumes the platform through the reusable workflow interface. The platform validates the contract, generates a neutral plan, optionally provisions the managed suite, and returns target-specific bindings and a client handoff package.
 
 ## Main Actors
 
 - Application team:
-  authors the workload contract and applies the generated bindings.
+  authors the workload contract, calls the platform workflow, and applies the generated bindings.
 - Platform product:
-  validates the contract, builds the neutral plan, and maps intent to supported classes and assets.
+  validates the contract, builds the neutral plan, maps intent to supported classes and assets, and packages the resulting outputs.
 - Target adapter:
   produces target-specific runtime bindings and platform integration outputs.
+- Managed suite path:
+  optionally provisions the platform-managed observability data plane when requested by the client workflow.
 
 ## Interaction Flow
 
 1. The application team creates and versions an `ObservabilityContract` with its application code.
-2. The platform validates the contract with `o11yctl validate`.
-3. The platform generates a neutral `ProvisioningPlan` with `o11yctl plan`.
-4. The target adapter materializes supported runtime bindings, currently through `o11yctl bindings aws-lambda`.
-5. The application deployment injects the generated outputs into the workload runtime.
-6. Platform-managed assets such as dashboards, alerts, collector configs, and managed-suite assets are selected from the catalog and asset layers.
-
-For GitHub-based consumers, the recommended product interface is the reusable workflow documented in [client-consumption.md](client-consumption.md), which wraps validate, plan, bindings, and optional managed-suite provisioning behind a single platform-owned workflow call.
+2. The application team calls the reusable workflow documented in [client-consumption.md](client-consumption.md).
+3. The platform validates the contract.
+4. The platform generates a neutral `ProvisioningPlan`.
+5. If requested, the platform provisions the managed suite and resolves its OTLP endpoint through the remote S3-backed Terraform state path.
+6. The target adapter materializes supported runtime bindings, currently through the AWS Lambda path.
+7. The platform publishes technical artifacts and a client-facing handoff package.
+8. The application deployment injects the generated outputs into the workload runtime.
+9. Platform-managed assets such as dashboards, alerts, collector configs, and managed-suite assets are selected from the catalog and asset layers.
 
 ## Concrete Example
 
 The AWS Lambda example in [examples/contracts/aws-lambda-order-processing.yaml](../examples/contracts/aws-lambda-order-processing.yaml) follows this path:
 
-1. The contract declares an AWS Lambda workload with OpenTelemetry enabled.
-2. The contract requests collector-based ingestion for traces, metrics, and logs.
-3. The contract requests dashboards, alerts, SLOs, and retention settings as platform capabilities.
-4. The planner resolves the AWS Lambda bindings class, collector class, and relevant assets.
-5. The AWS adapter produces Lambda-ready bindings so the workload can integrate with the platform without hardcoding observability infrastructure details.
+1. The client repository stores the contract next to its application code.
+2. The client workflow calls the platform reusable workflow.
+3. The contract requests collector-based ingestion for traces, metrics, and logs.
+4. The platform can provision the managed suite if the client wants platform-owned collector routing.
+5. The planner resolves the AWS Lambda bindings class, collector class, and relevant assets.
+6. The AWS adapter produces Lambda-ready bindings.
+7. The client receives `plan.json`, `bindings.json`, and the final `o11y-client-handoff` artifact.
 
-## CLI Walkthrough
+## Workflow-First Consumption
+
+The recommended client entrypoint is the reusable workflow in [client-consumption.md](client-consumption.md).
+
+That workflow wraps:
+
+- contract validation
+- neutral plan generation
+- optional managed-suite provisioning
+- AWS Lambda bindings generation
+- handoff artifact generation for the client team
+
+## Advanced CLI Walkthrough
+
+The CLI remains useful for local inspection, debugging, or internal platform development.
 
 Validate a contract:
 
@@ -66,6 +85,7 @@ The application team receives stable outputs rather than platform internals. Dep
 - OTLP collector or direct-export endpoints
 - Lambda layers or execution policy requirements
 - references to dashboards and platform-managed observability assets
+- the final `o11y-client-handoff` artifact with an implementation summary and manifest
 
 ## Related Documents
 

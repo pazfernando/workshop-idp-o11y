@@ -2,6 +2,17 @@
 
 This repository now exposes a minimal HTTP control plane through `o11yd`.
 
+## Current Position In The Product
+
+This API is a secondary interface, not the primary client-facing product interface.
+
+Today, the recommended interface for GitHub-based consumers is the reusable workflow documented in [client-consumption.md](client-consumption.md). The HTTP control plane remains useful for:
+
+- local development
+- internal platform integration experiments
+- future non-GitHub consumers
+- thin wrappers that want a remote stateless API
+
 ## Purpose
 
 The HTTP service exposes the same core product operations that already exist in the CLI:
@@ -100,6 +111,8 @@ curl -X POST http://127.0.0.1:8080/v1/bindings/aws-lambda \
 ## Current Boundary
 
 The HTTP control plane is suitable for remote CI/CD usage and thin platform API wrappers.
+
+It should currently be treated as an advanced or future-facing interface rather than the default customer onboarding path.
 
 It does not yet provide:
 

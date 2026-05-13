@@ -36,7 +36,8 @@ This document captures the remaining product gaps after the current repository i
 
 ## Recommended Execution Order
 
-1. harden persistent execution semantics and platform-owned state
-2. generalize capability execution beyond planning metadata
-3. expand target adapter coverage beyond AWS Lambda
-4. harden the remote control plane with auth, tenancy, and asynchronous operations
+1. harden the reusable workflow interface, client output contract, and workflow-based platform semantics
+2. harden persistent execution semantics and platform-owned state
+3. generalize capability execution beyond planning metadata
+4. expand target adapter coverage beyond AWS Lambda
+5. harden the remote control plane with auth, tenancy, and asynchronous operations only if that interface becomes a primary product path
