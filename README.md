@@ -17,11 +17,13 @@ This repository provides:
 
 ## Current Product Interface
 
-The current operational interface is CLI-first:
+The current operational interface includes both CLI and HTTP:
 
 - `o11yctl validate`
 - `o11yctl plan`
 - `o11yctl bindings aws-lambda`
+- `o11yd` HTTP control plane
+- root platform-managed suite workflows and Terraform module
 
 Example commands:
 
@@ -29,6 +31,7 @@ Example commands:
 go run ./cmd/o11yctl validate -f examples/contracts/aws-lambda-order-processing.yaml
 go run ./cmd/o11yctl plan -f examples/contracts/aws-lambda-order-processing.yaml
 go run ./cmd/o11yctl bindings aws-lambda -f examples/contracts/aws-lambda-order-processing.yaml --collector-endpoint http://collector.internal:4318
+go run ./cmd/o11yd -listen :8080
 ```
 
 ## Documentation
@@ -37,6 +40,8 @@ go run ./cmd/o11yctl bindings aws-lambda -f examples/contracts/aws-lambda-order-
 - Platform consumer flow: [docs/consumer-interaction-flow.md](docs/consumer-interaction-flow.md)
 - Observability contract: [docs/observability-contract.md](docs/observability-contract.md)
 - Contract authoring guide: [docs/contract-authoring-guide.md](docs/contract-authoring-guide.md)
+- Control-plane API: [docs/control-plane-api.md](docs/control-plane-api.md)
+- Managed suite deployment: [docs/managed-suite.md](docs/managed-suite.md)
 - Support matrix: [docs/support-matrix.md](docs/support-matrix.md)
 - Current gap list: [docs/gap-list.md](docs/gap-list.md)
 
@@ -53,14 +58,18 @@ go run ./cmd/o11yctl bindings aws-lambda -f examples/contracts/aws-lambda-order-
 ├── catalog
 │   └── classes
 ├── cmd/o11yctl
+├── cmd/o11yd
 ├── docs
 ├── examples
+├── .github
 ├── internal
 │   ├── api
 │   ├── adapters
 │   ├── planner
+│   ├── platform
+│   ├── server
 │   └── validation
-└── schemas
+└── infra
 ```
 
 ## Product Flow
@@ -111,6 +120,9 @@ sequenceDiagram
 - contract validation
 - backend-neutral planning
 - AWS Lambda runtime bindings
+- HTTP API for `validate`, `plan`, and `bindings aws-lambda`
+- root Terraform module for a platform-managed Grafana, Alloy, Prometheus, Loki, and Tempo suite
+- GitHub Actions workflows to apply or destroy the managed suite
 - reusable collector, dashboard, and alert asset layers
 
 ## Current Product Limits

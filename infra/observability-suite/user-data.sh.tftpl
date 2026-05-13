@@ -70,7 +70,7 @@ cat <<'EOF' | base64 -d > /opt/observability-suite/grafana/provisioning/dashboar
 ${grafana_dashboard_provider_b64}
 EOF
 
-cat <<'EOF' | base64 -d > /opt/observability-suite/grafana/dashboards/workshop-order-processing.json
+cat <<'EOF' | base64 -d > /opt/observability-suite/grafana/dashboards/${grafana_dashboard_file_name}
 ${grafana_dashboard_b64}
 EOF
 

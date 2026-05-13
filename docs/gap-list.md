@@ -1,28 +1,41 @@
 # Gap List
 
-This document captures the main product gaps identified from the current repository state.
+This document captures the remaining product gaps after the current repository implementation.
 
-## 1. Platform-Managed Suite Provisioning
+## Closed In The Current Repository State
 
-- The repository contains collector and managed-suite assets, but the operational deployment flow is not yet packaged as a reusable platform workflow at the root product boundary.
-- Dashboard and alert execution are still stronger at the planning or asset-reference layer than at a fully generalized adapter execution layer.
-- The platform needs a productized execution path for platform-managed observability suite provisioning that is independent from any single sample workload.
+- A root Terraform path now exists for the platform-managed observability suite.
+- Root GitHub Actions workflows now exist to apply or destroy that suite.
+- A remote HTTP surface now exists for `validate`, `plan`, and `bindings aws-lambda`.
+- The self-service documentation set now includes the contract guide, support matrix, consumer flow, managed-suite guide, and control-plane API guide.
 
-## 2. Remote Platform Execution Surface
+## 1. Persistent Execution Ownership
 
-- `o11yctl` supports `validate`, `plan`, and `bindings aws-lambda`, but it does not yet expose those capabilities through a remote platform interface.
-- The repository does not yet expose a remote HTTP or gRPC control-plane interface.
-- Idempotent convergence currently depends on the downstream execution backend rather than on a first-class platform execution service in this repository.
+- The HTTP control plane is stateless.
+- Idempotent convergence still depends on Terraform state and the execution backend rather than on repository-owned reconciliation state.
+- The platform does not yet persist contract submissions, plans, or binding history.
 
-## 3. Self-Service Contract Experience
+## 2. Generalized Capability Execution
 
-- The contract schema is strong, but clients need clearer authoring guidance than schema-only validation.
-- Supported values and supported combinations need to be explicit from a product perspective.
-- Clients need a field-by-field authoring guide, support matrix, and example-driven onboarding path.
+- Dashboards, alerts, SLOs, and retention are well represented in the contract and plan layers.
+- Their backend execution is still less generalized than AWS Lambda runtime bindings.
+- The repository still needs a broader adapter execution story beyond asset references and planning metadata.
+
+## 3. Expanded Target Coverage
+
+- AWS Lambda is still the only target with concrete runtime adapter output.
+- Kubernetes and hybrid targets still stop at validation and planning.
+- The platform still needs additional target adapters if it wants uniform multi-runtime execution.
+
+## 4. Control-Plane Hardening
+
+- There is no gRPC surface yet.
+- There is no authentication, authorization, or tenancy layer in `o11yd`.
+- There is no asynchronous execution model, job tracking, or long-running operation API.
 
 ## Recommended Execution Order
 
-1. finalize the documentation set for a product-facing platform experience
-2. productize the platform-managed suite deployment path
-3. define and implement the remote `validate`, `plan`, and `bindings` control-plane surface
-4. harden idempotent execution semantics and persistent state ownership
+1. harden persistent execution semantics and platform-owned state
+2. generalize capability execution beyond planning metadata
+3. expand target adapter coverage beyond AWS Lambda
+4. harden the remote control plane with auth, tenancy, and asynchronous operations

@@ -10,11 +10,12 @@ Supported today:
 - semantic validation
 - backend-neutral planning
 - AWS Lambda runtime binding generation
+- HTTP API for `validate`, `plan`, and `bindings aws-lambda`
+- root Terraform deployment path for a platform-managed observability suite
 
 Not yet provided as a platform interface:
 
-- remote API service for `validate`, `plan`, or `bindings`
-- a generic remote control-plane surface for contract-driven binding generation
+- gRPC control plane
 - reconciler-driven persistent platform state inside this repository
 
 ## Command Surface
@@ -24,8 +25,10 @@ Not yet provided as a platform interface:
 | `o11yctl validate` | Yes | Validates schema and semantic rules |
 | `o11yctl plan` | Yes | Produces a backend-neutral JSON plan |
 | `o11yctl bindings aws-lambda` | Yes | Produces AWS Lambda runtime bindings |
-| HTTP API | No | Not implemented |
+| `o11yd` HTTP API | Yes | Exposes `/v1/validate`, `/v1/plan`, and `/v1/bindings/aws-lambda` |
 | gRPC API | No | Not implemented |
+| Managed suite Terraform root | Yes | `infra/terraform/managed-suite` |
+| Managed suite GitHub workflows | Yes | Apply and destroy workflows at the product root |
 
 ## Target And Runtime Coverage
 
@@ -57,15 +60,16 @@ Not yet provided as a platform interface:
 Supported today:
 
 - local CLI execution inside a CI/CD runner
+- remote HTTP execution through `o11yd`
 - deterministic validation and plan generation
 - JSON output that can be consumed by downstream steps
 - adapter output generation for AWS Lambda runtime configuration
+- product-owned suite provisioning through Terraform state
 
 Not yet productized:
 
-- a remotely hosted platform control plane
-- a remotely hosted idempotent surface for `validate`, `plan`, and `bindings`
 - first-class execution state managed by this repository
+- platform-owned asynchronous reconciliation beyond Terraform state
 
 ## Guidance For Application Teams
 

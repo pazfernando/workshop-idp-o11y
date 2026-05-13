@@ -27,13 +27,17 @@
 
 ## Current Execution Interface
 
-Today, the operational interface is CLI-first:
+Today, the operational interface is split across a stateless control plane and a productized infrastructure path:
 
 - `o11yctl validate`
 - `o11yctl plan`
 - `o11yctl bindings aws-lambda`
+- `o11yd` HTTP endpoints for remote `validate`, `plan`, and `bindings aws-lambda`
+- `infra/terraform/managed-suite`
+- `.github/workflows/managed-suite-apply.yml`
+- `.github/workflows/managed-suite-destroy.yml`
 
-These commands are suitable for CI/CD pipeline execution because they are non-interactive and return deterministic JSON or validation results.
+The CLI and HTTP surfaces are suitable for CI/CD pipeline execution because they are non-interactive and return deterministic validation results or JSON payloads.
 
 ## Current Idempotency Model
 
@@ -45,6 +49,7 @@ This repository already includes the reusable building blocks for that model:
 - backend-neutral planning
 - adapter-driven runtime binding generation
 - reusable Terraform module inputs for AWS Lambda
+- a root Terraform path for platform-managed collector and visualization infrastructure
 
 ## AWS Lambda Runtime Flow
 

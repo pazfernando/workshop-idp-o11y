@@ -1,0 +1,70 @@
+{
+  "contract": {
+    "apiVersion": "observability.platform/v1alpha1",
+    "kind": "ObservabilityContract",
+    "metadata": {
+      "name": "order-processing",
+      "owner": "payments-platform",
+      "system": "commerce",
+      "environment": "dev"
+    },
+    "spec": {
+      "service": {
+        "name": "order-processing",
+        "runtime": "aws-lambda",
+        "language": "nodejs",
+        "framework": "lambda"
+      },
+      "delivery": {
+        "mode": "provision",
+        "target": "aws",
+        "region": "us-east-1"
+      },
+      "telemetry": {
+        "openTelemetry": {
+          "enabled": true,
+          "semanticConventions": "1.26.0",
+          "propagators": ["tracecontext", "baggage", "xray"]
+        },
+        "resourceAttributes": {
+          "service.name": "order-processing",
+          "service.namespace": "commerce",
+          "service.version": "1.0.0",
+          "deployment.environment": "dev"
+        },
+        "signals": {
+          "traces": {
+            "enabled": true,
+            "backendClass": "aws-xray",
+            "ingestion": "collector"
+          },
+          "metrics": {
+            "enabled": true,
+            "backendClass": "aws-cloudwatch-metrics",
+            "ingestion": "collector",
+            "catalog": [
+              {
+                "name": "orders_created_total",
+                "type": "counter",
+                "unit": "1",
+                "description": "Number of created orders"
+              }
+            ]
+          },
+          "logs": {
+            "enabled": true,
+            "backendClass": "aws-cloudwatch-logs",
+            "ingestion": "collector",
+            "format": "json"
+          }
+        }
+      },
+      "capabilities": {
+        "dashboards": {
+          "enabled": true,
+          "preset": "api-workload"
+        }
+      }
+    }
+  }
+}

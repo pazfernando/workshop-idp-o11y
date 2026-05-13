@@ -1,0 +1,120 @@
+name: Destroy Managed Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Base name used for managed-suite resources
+        required: false
+        default: o11y-platform
+        type: string
+      aws_region:
+        description: AWS region where the suite was deployed
+        required: false
+        default: us-east-1
+        type: string
+      subnet_id:
+        description: Optional subnet ID used for deployment
+        required: false
+        default: ""
+        type: string
+      instance_type:
+        description: EC2 instance type used for deployment
+        required: false
+        default: t3.small
+        type: string
+      root_volume_size_gb:
+        description: Root volume size in GiB used for deployment
+        required: false
+        default: "20"
+        type: string
+      dashboard_uid:
+        description: Grafana dashboard UID used for deployment
+        required: false
+        default: platform-observability
+        type: string
+      dashboard_title:
+        description: Grafana dashboard title used for deployment
+        required: false
+        default: Platform Observability
+        type: string
+      grafana_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to access Grafana
+        required: false
+        default: "[\"0.0.0.0/0\"]"
+        type: string
+      otlp_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to send OTLP traffic
+        required: false
+        default: "[\"0.0.0.0/0\"]"
+        type: string
+      ssh_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to access SSH
+        required: false
+        default: "[]"
+        type: string
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      AWS_REGION: ${{ inputs.aws_region }}
+      SUITE_NAME: ${{ inputs.name }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.name) }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD != '' && secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || vars.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Terraform state bucket
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [ -n "$TF_STATE_BUCKET" ]; then
+            BUCKET_NAME="$TF_STATE_BUCKET"
+          else
+            PROJECT_SLUG="$(printf '%s' "$SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+            PROJECT_SLUG="${PROJECT_SLUG#-}"
+            PROJECT_SLUG="${PROJECT_SLUG%-}"
+            BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+            BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
+          fi
+
+          echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
+
+      - name: Initialize Terraform
+        run: |
+          terraform -chdir=infra/terraform/managed-suite init -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}"
+
+      - name: Destroy Terraform
+        run: |
+          terraform -chdir=infra/terraform/managed-suite destroy -auto-approve \
+            -var="aws_region=${AWS_REGION}" \
+            -var="name=${{ inputs.name }}" \
+            -var="subnet_id=${{ inputs.subnet_id }}" \
+            -var="instance_type=${{ inputs.instance_type }}" \
+            -var="root_volume_size_gb=${{ inputs.root_volume_size_gb }}" \
+            -var="dashboard_uid=${{ inputs.dashboard_uid }}" \
+            -var="dashboard_title=${{ inputs.dashboard_title }}" \
+            -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
+            -var="grafana_allowed_cidrs=${{ inputs.grafana_allowed_cidrs }}" \
+            -var="otlp_allowed_cidrs=${{ inputs.otlp_allowed_cidrs }}" \
+            -var="ssh_allowed_cidrs=${{ inputs.ssh_allowed_cidrs }}"
