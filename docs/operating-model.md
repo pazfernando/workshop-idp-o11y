@@ -42,7 +42,7 @@ The CLI and HTTP surfaces are suitable for CI/CD pipeline execution because they
 
 ## Current Idempotency Model
 
-The contract validation and planning steps are stateless. Idempotent infrastructure convergence is currently the responsibility of the execution backend that consumes the generated plan or bindings, such as Terraform with remote state.
+The contract validation and planning steps are stateless. Idempotent infrastructure convergence is currently the responsibility of the execution backend that consumes the generated plan or bindings, such as Terraform with remote state stored in S3.
 
 This repository already includes the reusable building blocks for that model:
 

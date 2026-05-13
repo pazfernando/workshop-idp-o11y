@@ -30,12 +30,50 @@ Asset layer:
 
 ## Terraform Usage
 
-Initialize and apply:
+Do not use local Terraform state for this root. The managed suite is intended to converge through the S3 backend declared in `versions.tf`.
+
+For ad hoc operator-driven execution, first resolve or create the state bucket and key, then initialize Terraform against that remote backend.
+
+Example:
 
 ```bash
-terraform -chdir=infra/terraform/managed-suite init
-terraform -chdir=infra/terraform/managed-suite apply
+AWS_REGION=us-east-1
+SUITE_NAME=o11y-platform
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+TF_STATE_BUCKET="${SUITE_NAME}-${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+TF_STATE_KEY="platform/${SUITE_NAME}.tfstate"
+
+if aws s3api head-bucket --bucket "$TF_STATE_BUCKET" 2>/dev/null; then
+  echo "Using existing Terraform state bucket: $TF_STATE_BUCKET"
+else
+  if [ "$AWS_REGION" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "$TF_STATE_BUCKET"
+  else
+    aws s3api create-bucket \
+      --bucket "$TF_STATE_BUCKET" \
+      --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
+  fi
+
+  aws s3api put-bucket-versioning \
+    --bucket "$TF_STATE_BUCKET" \
+    --versioning-configuration Status=Enabled
+
+  aws s3api put-bucket-encryption \
+    --bucket "$TF_STATE_BUCKET" \
+    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+fi
+
+terraform -chdir=infra/terraform/managed-suite init -reconfigure \
+  -backend-config="bucket=${TF_STATE_BUCKET}" \
+  -backend-config="key=${TF_STATE_KEY}" \
+  -backend-config="region=${AWS_REGION}"
+
+terraform -chdir=infra/terraform/managed-suite apply -auto-approve \
+  -var="aws_region=${AWS_REGION}" \
+  -var="name=${SUITE_NAME}"
 ```
+
+This is the same strategy used by the product workflows through the `Ensure Terraform state bucket` step.
 
 Key inputs:
 
@@ -80,5 +118,5 @@ The destroy workflow reuses the same state key and destroys that same Terraform 
 ## Current Design Notes
 
 - The suite is EC2-based and stateful at the infrastructure layer.
-- The repository now owns the reusable deployment path, but persistent reconciliation still depends on Terraform state.
+- The repository now owns the reusable deployment path, but persistent reconciliation still depends on Terraform state stored in S3 rather than local state files.
 - The default dashboard is generic platform observability, not tied to a sample workload.

@@ -10,6 +10,7 @@ The recommended path for GitHub-based clients is the reusable workflow interface
 - it gives the client a stable product interface
 - it keeps the platform logic centralized in this repository
 - it lets the platform evolve validation, planning, bindings, and managed-suite logic without copying scripts into each client repository
+- when managed-suite deployment is enabled, it also guarantees remote Terraform state through the workflow-managed S3 backend strategy
 
 ## What The Client Calls
 
@@ -74,6 +75,8 @@ jobs:
 ```
 
 When `deploy_managed_suite: true` and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP HTTP endpoint as the effective collector endpoint for bindings generation.
+
+When `deploy_managed_suite: true`, the workflow also applies the platform standard `Ensure Terraform state bucket` strategy so the suite never converges against local Terraform state.
 
 ## What The Client Receives
 
