@@ -173,20 +173,11 @@ jobs:
       OTLP_ALLOWED_CIDRS: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
       SSH_ALLOWED_CIDRS: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
     steps:
-      - name: Resolve platform repository
-        id: platform-repo
-        run: |
-          WORKFLOW_REF="${{ github.workflow_ref }}"
-          REPO="${WORKFLOW_REF%%/.github/workflows/*}"
-          REF="${WORKFLOW_REF##*@}"
-          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
       - name: Checkout platform repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.platform-repo.outputs.repo }}
-          ref: ${{ steps.platform-repo.outputs.ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: platform-repo
 
       - name: Checkout caller repository
@@ -245,10 +236,29 @@ jobs:
             echo "Explicit collector_endpoint provided. It will take precedence over the managed-suite OTLP endpoint."
           fi
 
+      - name: Resolve Go version
+        id: go-version
+        run: |
+          set -euo pipefail
+          GO_VERSION_FILE="$GITHUB_WORKSPACE/platform-repo/go.mod"
+
+          if [ ! -f "$GO_VERSION_FILE" ]; then
+            echo "Unable to locate go.mod for the platform repository." >&2
+            exit 1
+          fi
+
+          GO_VERSION="$(sed -nE 's/^go[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/p' "$GO_VERSION_FILE" | head -n1)"
+          if [ -z "$GO_VERSION" ]; then
+            echo "Unable to determine Go version from $GO_VERSION_FILE." >&2
+            exit 1
+          fi
+
+          echo "version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: platform-repo/go.mod
+          go-version: ${{ steps.go-version.outputs.version }}
 
       - name: Setup Terraform
         if: ${{ inputs.deploy_managed_suite }}

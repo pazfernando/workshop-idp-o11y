@@ -18,6 +18,8 @@ The client workflow calls:
 
 `<platform-repo>/.github/workflows/contract-consumer.yml`
 
+The client does not need to pass platform repository or ref inputs. The reusable workflow checks out its own pinned source and the caller repository separately so platform logic stays aligned with the exact workflow revision being executed.
+
 That reusable workflow can:
 
 - validate a contract
