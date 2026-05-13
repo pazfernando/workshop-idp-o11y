@@ -1,0 +1,82 @@
+# Support Matrix
+
+This document defines what the platform product supports today.
+
+## Contract Interface
+
+Supported today:
+
+- contract schema validation
+- semantic validation
+- backend-neutral planning
+- AWS Lambda runtime binding generation
+
+Not yet provided as a platform interface:
+
+- remote API service for `validate`, `plan`, or `bindings`
+- a generic remote control-plane surface for contract-driven binding generation
+- reconciler-driven persistent platform state inside this repository
+
+## Command Surface
+
+| Interface | Supported | Notes |
+| :--- | :--- | :--- |
+| `o11yctl validate` | Yes | Validates schema and semantic rules |
+| `o11yctl plan` | Yes | Produces a backend-neutral JSON plan |
+| `o11yctl bindings aws-lambda` | Yes | Produces AWS Lambda runtime bindings |
+| HTTP API | No | Not implemented |
+| gRPC API | No | Not implemented |
+
+## Target And Runtime Coverage
+
+| Target | Runtime | Validation | Planning | Adapter Output | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `aws` | `aws-lambda` | Yes | Yes | Yes | Primary implemented runtime path today |
+| `kubernetes` | `kubernetes` | Yes | Yes | No target adapter yet | Contract and planning path exist |
+| `hybrid` | `vm` or mixed | Yes | Yes | No target adapter yet | Contract and planning path exist |
+
+## Ingestion Mode Coverage
+
+| Ingestion | Validation | Planning | AWS Lambda Bindings | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `collector` | Yes | Yes | Yes | Preferred mode for platform-managed routing |
+| `direct` | Yes | Yes | Yes | Supported for AWS Lambda bindings with target-specific constraints |
+
+## Capability Coverage
+
+| Capability | Contract | Plan | AWS Adapter Materialization | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| Dashboards | Yes | Yes | Partial | Planner resolves classes and asset references; backend rendering is not fully generalized |
+| Alerts | Yes | Yes | Partial | Planner carries rules; generalized backend rendering is not complete |
+| SLOs | Yes | Yes | Partial | Planner carries objectives; execution backend is not generalized |
+| Data retention | Yes | Yes | Partial | Planner carries policy intent; enforcement depends on execution backend |
+| Runtime bindings | Yes | Yes | Yes for AWS Lambda | Concrete adapter output exists |
+
+## CI/CD Consumption Model
+
+Supported today:
+
+- local CLI execution inside a CI/CD runner
+- deterministic validation and plan generation
+- JSON output that can be consumed by downstream steps
+- adapter output generation for AWS Lambda runtime configuration
+
+Not yet productized:
+
+- a remotely hosted platform control plane
+- a remotely hosted idempotent surface for `validate`, `plan`, and `bindings`
+- first-class execution state managed by this repository
+
+## Guidance For Application Teams
+
+Before authoring a contract, check:
+
+1. whether your target and runtime combination is in the supported adapter path
+2. whether the capability you want is fully materialized or only represented at planning level
+3. whether your delivery pipeline consumes CLI output directly or expects a remote platform API
+
+## Companion References
+
+- [observability-contract.md](observability-contract.md)
+- [contract-authoring-guide.md](contract-authoring-guide.md)
+- [operating-model.md](operating-model.md)
