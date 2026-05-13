@@ -24,6 +24,8 @@ That reusable workflow can:
 - build AWS Lambda bindings
 - optionally deploy the platform-managed suite first and then use its OTLP endpoint for bindings generation
 
+A concrete end-to-end example is included in [examples/consumers/aws-lambda-order-processing/README.md](../examples/consumers/aws-lambda-order-processing/README.md).
+
 ## Minimal Caller Example
 
 ```yaml
@@ -139,6 +141,8 @@ This is the clearest switch point for clients:
 2. remove copied local platform scripts
 3. replace local `o11yctl` commands with the reusable workflow call
 4. consume workflow outputs or artifacts in downstream deployment jobs
+
+For a concrete reference, see [examples/consumers/aws-lambda-order-processing/.github/workflows/consume-observability-platform.yml](../examples/consumers/aws-lambda-order-processing/.github/workflows/consume-observability-platform.yml).
 
 ## How The Client Uses The Outputs
 

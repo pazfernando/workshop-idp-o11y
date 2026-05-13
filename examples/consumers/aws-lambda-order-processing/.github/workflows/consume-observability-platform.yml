@@ -1,0 +1,44 @@
+name: Consume Observability Platform
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  observability:
+    uses: your-org/workshop-iidp-o11y/.github/workflows/contract-consumer.yml@main
+    with:
+      contract_path: examples/contracts/aws-lambda-order-processing.yaml
+      generate_bindings: true
+      bindings_target: aws-lambda
+      instrumentation_mode: code
+      deploy_managed_suite: true
+      aws_region: us-east-1
+      managed_suite_name: order-processing-o11y
+      managed_suite_grafana_allowed_cidrs: '["10.0.0.0/8"]'
+      managed_suite_otlp_allowed_cidrs: '["10.0.0.0/8"]'
+    secrets: inherit
+
+  deploy:
+    needs: observability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@v4
+
+      - name: Persist observability outputs
+        run: |
+          mkdir -p build/observability
+          printf '%s\n' '${{ needs.observability.outputs.plan_json }}' > build/observability/plan.json
+          printf '%s\n' '${{ needs.observability.outputs.bindings_json }}' > build/observability/bindings.json
+
+      - name: Show effective collector endpoint
+        run: |
+          echo "Collector endpoint: ${{ needs.observability.outputs.effective_collector_endpoint }}"
+          echo "Grafana URL: ${{ needs.observability.outputs.managed_suite_grafana_url }}"
+
+      - name: Placeholder deployment step
+        run: |
+          echo "Use build/observability/bindings.json to inject runtime configuration into your deployment step."
