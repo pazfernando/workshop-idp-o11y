@@ -51,7 +51,7 @@ on:
       ssh_allowed_cidrs:
         description: JSON array of CIDR ranges allowed to access SSH
         required: false
-        default: "[]"
+        default: "[\"0.0.0.0/0\"]"
         type: string
 
 jobs:
