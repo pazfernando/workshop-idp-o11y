@@ -194,6 +194,57 @@ jobs:
         with:
           path: client-repo
 
+      - name: Preflight workflow inputs
+        env:
+          CONTRACT_PATH_INPUT: ${{ inputs.contract_path }}
+          GENERATE_BINDINGS: ${{ inputs.generate_bindings }}
+          BINDINGS_TARGET: ${{ inputs.bindings_target }}
+          INSTRUMENTATION_MODE: ${{ inputs.instrumentation_mode }}
+          DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
+          MANAGED_SUITE_NAME_INPUT: ${{ inputs.managed_suite_name }}
+          GRAFANA_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
+          OTLP_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
+          SSH_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
+          COLLECTOR_ENDPOINT_INPUT: ${{ inputs.collector_endpoint }}
+        run: |
+          set -euo pipefail
+
+          case "$CONTRACT_PATH_INPUT" in
+            ""|/*|../*|*/../*|*..\\*)
+              echo "contract_path must be a relative path inside the caller repository." >&2
+              exit 1
+              ;;
+          esac
+
+          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/$CONTRACT_PATH_INPUT"
+          if [ ! -f "$CONTRACT_PATH" ]; then
+            echo "Contract file not found: $CONTRACT_PATH_INPUT" >&2
+            exit 1
+          fi
+
+          if [ "$GENERATE_BINDINGS" = "true" ] && [ "$BINDINGS_TARGET" != "aws-lambda" ]; then
+            echo "generate_bindings currently supports only bindings_target=aws-lambda." >&2
+            exit 1
+          fi
+
+          if [ "$INSTRUMENTATION_MODE" != "code" ] && [ "$INSTRUMENTATION_MODE" != "adot_layer" ]; then
+            echo "instrumentation_mode must be one of: code, adot_layer." >&2
+            exit 1
+          fi
+
+          if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -z "$MANAGED_SUITE_NAME_INPUT" ]; then
+            echo "managed_suite_name is required when deploy_managed_suite=true." >&2
+            exit 1
+          fi
+
+          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$GRAFANA_ALLOWED_CIDRS_INPUT"
+          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$OTLP_ALLOWED_CIDRS_INPUT"
+          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$SSH_ALLOWED_CIDRS_INPUT"
+
+          if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -n "$COLLECTOR_ENDPOINT_INPUT" ]; then
+            echo "Explicit collector_endpoint provided. It will take precedence over the managed-suite OTLP endpoint."
+          fi
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -289,6 +340,7 @@ jobs:
       - name: Resolve collector endpoint
         id: resolve-collector
         run: |
+          set -euo pipefail
           EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
           if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
             EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
@@ -298,6 +350,7 @@ jobs:
       - name: Validate contract
         id: validate
         run: |
+          set -euo pipefail
           CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
           mkdir -p "$GITHUB_WORKSPACE/generated"
           VALIDATION_MESSAGE="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl validate -f "$CONTRACT_PATH")"
@@ -311,6 +364,7 @@ jobs:
       - name: Build plan
         id: plan
         run: |
+          set -euo pipefail
           CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
           PLAN_JSON="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl plan -f "$CONTRACT_PATH")"
           printf '%s\n' "$PLAN_JSON" > "$GITHUB_WORKSPACE/generated/plan.json"
@@ -324,6 +378,7 @@ jobs:
         id: bindings
         if: ${{ inputs.generate_bindings }}
         run: |
+          set -euo pipefail
           CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
           TARGET="${{ inputs.bindings_target }}"
           if [ "$TARGET" != "aws-lambda" ]; then
@@ -360,6 +415,20 @@ jobs:
             printf '%s\n' "$BINDINGS_JSON"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Workflow summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Contract Consumer Result"
+            echo
+            echo "- contract path: \`${{ inputs.contract_path }}\`"
+            echo "- generate bindings: \`${{ inputs.generate_bindings }}\`"
+            echo "- bindings target: \`${{ inputs.bindings_target }}\`"
+            echo "- managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`"
+            echo "- effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`"
+            echo "- artifact upload enabled: \`${{ inputs.upload_artifacts }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Default bindings output
         id: bindings-default

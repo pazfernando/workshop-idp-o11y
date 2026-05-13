@@ -24,6 +24,7 @@ That reusable workflow can:
 - build a backend-neutral plan
 - build AWS Lambda bindings
 - optionally deploy the platform-managed suite first and then use its OTLP endpoint for bindings generation
+- fail early on invalid caller paths, unsupported targets, invalid JSON-array CIDR inputs, and incompatible instrumentation values
 
 A concrete end-to-end example is included in [examples/consumers/aws-lambda-order-processing/README.md](../examples/consumers/aws-lambda-order-processing/README.md).
 
@@ -76,6 +77,8 @@ jobs:
 
 When `deploy_managed_suite: true` and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP HTTP endpoint as the effective collector endpoint for bindings generation.
 
+If both are set, the explicit `collector_endpoint` wins and the workflow emits that precedence in the run logs.
+
 When `deploy_managed_suite: true`, the workflow also applies the platform standard `Ensure Terraform state bucket` strategy so the suite never converges against local Terraform state.
 
 ## What The Client Receives
@@ -89,6 +92,8 @@ Workflow outputs:
 - `managed_suite_grafana_url`
 - `managed_suite_otlp_http_endpoint`
 - `effective_collector_endpoint`
+
+The workflow also writes a short GitHub Actions job summary with the selected contract path, whether bindings were generated, whether the managed suite was deployed, and the effective collector endpoint.
 
 Artifacts:
 
@@ -104,6 +109,17 @@ When `deploy_managed_suite` is enabled, the caller should pass `secrets: inherit
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN` when temporary credentials are used
 - optionally `OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD`
+
+## Input Guardrails
+
+The reusable workflow now enforces a few caller-facing rules before doing any expensive work:
+
+- `contract_path` must be a relative path inside the caller repository
+- the contract file must exist
+- `bindings_target` must be `aws-lambda` when bindings are enabled
+- `instrumentation_mode` must be `code` or `adot_layer`
+- managed-suite CIDR inputs must be valid JSON arrays
+- `managed_suite_name` must be non-empty when managed-suite deployment is enabled
 
 ## How To Switch From Direct CLI Usage
 
