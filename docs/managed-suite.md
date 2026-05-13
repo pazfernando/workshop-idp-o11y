@@ -13,7 +13,7 @@ The managed suite provisions:
 - Tempo
 - supporting AWS security group, IAM, EC2, and Elastic IP resources
 
-The deployment path is independent from the sample application imports. It is meant to represent the platform product boundary for a shared or dedicated observability data plane.
+The deployment path is meant to represent the platform product boundary for a shared or dedicated observability data plane.
 
 ## Product Interfaces
 
@@ -22,6 +22,7 @@ Infrastructure path:
 - Terraform root: `infra/terraform/managed-suite`
 - GitHub Actions apply workflow: `.github/workflows/managed-suite-apply.yml`
 - GitHub Actions destroy workflow: `.github/workflows/managed-suite-destroy.yml`
+- reusable client workflow path: `.github/workflows/contract-consumer.yml` with `deploy_managed_suite: true`
 
 Asset layer:
 
@@ -63,6 +64,8 @@ Key outputs:
 ## GitHub Actions Usage
 
 The apply workflow is intended for product operations teams that want a standard, repository-owned deployment path.
+
+For GitHub-based application teams, the same suite can also be provisioned indirectly through the reusable workflow documented in [client-consumption.md](client-consumption.md).
 
 The workflow:
 

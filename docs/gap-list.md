@@ -7,6 +7,7 @@ This document captures the remaining product gaps after the current repository i
 - A root Terraform path now exists for the platform-managed observability suite.
 - Root GitHub Actions workflows now exist to apply or destroy that suite.
 - A remote HTTP surface now exists for `validate`, `plan`, and `bindings aws-lambda`.
+- A reusable GitHub workflow now exists as the recommended CI/CD consumption interface for GitHub clients.
 - The self-service documentation set now includes the contract guide, support matrix, consumer flow, managed-suite guide, and control-plane API guide.
 
 ## 1. Persistent Execution Ownership

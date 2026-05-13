@@ -11,6 +11,7 @@ Supported today:
 - backend-neutral planning
 - AWS Lambda runtime binding generation
 - HTTP API for `validate`, `plan`, and `bindings aws-lambda`
+- reusable GitHub workflow for client CI/CD consumption
 - root Terraform deployment path for a platform-managed observability suite
 
 Not yet provided as a platform interface:
@@ -26,6 +27,7 @@ Not yet provided as a platform interface:
 | `o11yctl plan` | Yes | Produces a backend-neutral JSON plan |
 | `o11yctl bindings aws-lambda` | Yes | Produces AWS Lambda runtime bindings |
 | `o11yd` HTTP API | Yes | Exposes `/v1/validate`, `/v1/plan`, and `/v1/bindings/aws-lambda` |
+| reusable workflow | Yes | `.github/workflows/contract-consumer.yml` |
 | gRPC API | No | Not implemented |
 | Managed suite Terraform root | Yes | `infra/terraform/managed-suite` |
 | Managed suite GitHub workflows | Yes | Apply and destroy workflows at the product root |
@@ -61,6 +63,7 @@ Supported today:
 
 - local CLI execution inside a CI/CD runner
 - remote HTTP execution through `o11yd`
+- remote GitHub-native execution through the reusable workflow interface
 - deterministic validation and plan generation
 - JSON output that can be consumed by downstream steps
 - adapter output generation for AWS Lambda runtime configuration
@@ -77,10 +80,11 @@ Before authoring a contract, check:
 
 1. whether your target and runtime combination is in the supported adapter path
 2. whether the capability you want is fully materialized or only represented at planning level
-3. whether your delivery pipeline consumes CLI output directly or expects a remote platform API
+3. whether your delivery pipeline consumes CLI output directly, the reusable workflow interface, or a remote platform API
 
 ## Companion References
 
 - [observability-contract.md](observability-contract.md)
 - [contract-authoring-guide.md](contract-authoring-guide.md)
+- [client-consumption.md](client-consumption.md)
 - [operating-model.md](operating-model.md)

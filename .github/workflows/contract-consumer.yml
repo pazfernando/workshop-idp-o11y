@@ -1,0 +1,374 @@
+name: Contract Consumer Interface
+
+on:
+  workflow_call:
+    inputs:
+      contract_path:
+        description: Path to the ObservabilityContract YAML file in the caller repository.
+        required: true
+        type: string
+      upload_artifacts:
+        description: Upload validation, plan, and bindings payloads as workflow artifacts.
+        required: false
+        default: true
+        type: boolean
+      generate_bindings:
+        description: Generate target-specific bindings after validate and plan.
+        required: false
+        default: true
+        type: boolean
+      bindings_target:
+        description: Target adapter to use when generate_bindings is enabled.
+        required: false
+        default: aws-lambda
+        type: string
+      instrumentation_mode:
+        description: AWS Lambda instrumentation mode.
+        required: false
+        default: code
+        type: string
+      adot_lambda_layer_arn:
+        description: Optional ADOT Lambda layer ARN when instrumentation_mode is adot_layer.
+        required: false
+        default: ""
+        type: string
+      collector_endpoint:
+        description: Optional collector OTLP base endpoint.
+        required: false
+        default: ""
+        type: string
+      collector_traces_endpoint:
+        description: Optional collector traces endpoint override.
+        required: false
+        default: ""
+        type: string
+      collector_metrics_endpoint:
+        description: Optional collector metrics endpoint override.
+        required: false
+        default: ""
+        type: string
+      direct_endpoint:
+        description: Optional direct OTLP base endpoint.
+        required: false
+        default: ""
+        type: string
+      direct_traces_endpoint:
+        description: Optional direct traces endpoint override.
+        required: false
+        default: ""
+        type: string
+      direct_metrics_endpoint:
+        description: Optional direct metrics endpoint override.
+        required: false
+        default: ""
+        type: string
+      metric_export_interval_ms:
+        description: Metric export interval in milliseconds.
+        required: false
+        default: 10000
+        type: number
+      emf_compatibility_mode:
+        description: Keep EMF compatibility mode enabled for AWS Lambda bindings.
+        required: false
+        default: false
+        type: boolean
+      deploy_managed_suite:
+        description: Deploy the platform-managed suite before generating bindings.
+        required: false
+        default: false
+        type: boolean
+      aws_region:
+        description: AWS region used when deploy_managed_suite is enabled.
+        required: false
+        default: us-east-1
+        type: string
+      managed_suite_name:
+        description: Base name used for managed-suite resources.
+        required: false
+        default: o11y-platform
+        type: string
+      managed_suite_subnet_id:
+        description: Optional subnet ID for the managed suite.
+        required: false
+        default: ""
+        type: string
+      managed_suite_instance_type:
+        description: EC2 instance type for the managed suite.
+        required: false
+        default: t3.small
+        type: string
+      managed_suite_root_volume_size_gb:
+        description: Root volume size in GiB for the managed suite.
+        required: false
+        default: 20
+        type: number
+      managed_suite_dashboard_uid:
+        description: Grafana dashboard UID for the managed suite.
+        required: false
+        default: platform-observability
+        type: string
+      managed_suite_dashboard_title:
+        description: Grafana dashboard title for the managed suite.
+        required: false
+        default: Platform Observability
+        type: string
+      managed_suite_grafana_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to access Grafana.
+        required: false
+        default: "[\"0.0.0.0/0\"]"
+        type: string
+      managed_suite_otlp_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to access OTLP endpoints.
+        required: false
+        default: "[\"0.0.0.0/0\"]"
+        type: string
+      managed_suite_ssh_allowed_cidrs:
+        description: JSON array of CIDR ranges allowed to access SSH.
+        required: false
+        default: "[]"
+        type: string
+    outputs:
+      validation_message:
+        description: Validation result message.
+        value: ${{ jobs.contract.outputs.validation_message }}
+      plan_json:
+        description: Backend-neutral plan JSON.
+        value: ${{ jobs.contract.outputs.plan_json }}
+      bindings_json:
+        description: Target-specific bindings JSON when generate_bindings is enabled.
+        value: ${{ jobs.contract.outputs.bindings_json }}
+      managed_suite_enabled:
+        description: Whether the managed suite was deployed by the workflow.
+        value: ${{ jobs.contract.outputs.managed_suite_enabled }}
+      managed_suite_grafana_url:
+        description: Grafana URL when the managed suite was deployed.
+        value: ${{ jobs.contract.outputs.managed_suite_grafana_url }}
+      managed_suite_otlp_http_endpoint:
+        description: Alloy OTLP HTTP endpoint when the managed suite was deployed.
+        value: ${{ jobs.contract.outputs.managed_suite_otlp_http_endpoint }}
+      effective_collector_endpoint:
+        description: Effective collector endpoint used for bindings generation.
+        value: ${{ jobs.contract.outputs.effective_collector_endpoint }}
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      validation_message: ${{ steps.validate.outputs.validation_message }}
+      plan_json: ${{ steps.plan.outputs.plan_json }}
+      bindings_json: ${{ steps.bindings.outputs.bindings_json }}
+      managed_suite_enabled: ${{ steps.managed-suite-results.outputs.managed_suite_enabled }}
+      managed_suite_grafana_url: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
+      managed_suite_otlp_http_endpoint: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
+      effective_collector_endpoint: ${{ steps.resolve-collector.outputs.effective_collector_endpoint }}
+    env:
+      AWS_REGION: ${{ inputs.aws_region }}
+      MANAGED_SUITE_NAME: ${{ inputs.managed_suite_name }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.managed_suite_name) }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD != '' && secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || vars.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || '' }}
+      GRAFANA_ALLOWED_CIDRS: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
+      OTLP_ALLOWED_CIDRS: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
+      SSH_ALLOWED_CIDRS: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
+    steps:
+      - name: Resolve platform repository
+        id: platform-repo
+        run: |
+          WORKFLOW_REF="${{ github.workflow_ref }}"
+          REPO="${WORKFLOW_REF%%/.github/workflows/*}"
+          REF="${WORKFLOW_REF##*@}"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.platform-repo.outputs.repo }}
+          ref: ${{ steps.platform-repo.outputs.ref }}
+          path: platform-repo
+
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+        with:
+          path: client-repo
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: platform-repo/go.mod
+
+      - name: Setup Terraform
+        if: ${{ inputs.deploy_managed_suite }}
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.deploy_managed_suite }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure Terraform state bucket
+        if: ${{ inputs.deploy_managed_suite }}
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [ -n "$TF_STATE_BUCKET" ]; then
+            BUCKET_NAME="$TF_STATE_BUCKET"
+          else
+            PROJECT_SLUG="$(printf '%s' "$MANAGED_SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+            PROJECT_SLUG="${PROJECT_SLUG#-}"
+            PROJECT_SLUG="${PROJECT_SLUG%-}"
+            BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+            BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
+          fi
+
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Using existing Terraform state bucket: $BUCKET_NAME"
+          else
+            if [ "$AWS_REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$BUCKET_NAME"
+            else
+              aws s3api create-bucket --bucket "$BUCKET_NAME" --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
+            fi
+
+            aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
+            aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          fi
+
+          echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
+
+      - name: Initialize managed-suite Terraform
+        if: ${{ inputs.deploy_managed_suite }}
+        run: |
+          terraform -chdir=platform-repo/infra/terraform/managed-suite init -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}"
+
+      - name: Apply managed suite
+        if: ${{ inputs.deploy_managed_suite }}
+        run: |
+          terraform -chdir=platform-repo/infra/terraform/managed-suite apply -auto-approve \
+            -var="aws_region=${AWS_REGION}" \
+            -var="name=${{ inputs.managed_suite_name }}" \
+            -var="subnet_id=${{ inputs.managed_suite_subnet_id }}" \
+            -var="instance_type=${{ inputs.managed_suite_instance_type }}" \
+            -var="root_volume_size_gb=${{ inputs.managed_suite_root_volume_size_gb }}" \
+            -var="dashboard_uid=${{ inputs.managed_suite_dashboard_uid }}" \
+            -var="dashboard_title=${{ inputs.managed_suite_dashboard_title }}" \
+            -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
+            -var="grafana_allowed_cidrs=${GRAFANA_ALLOWED_CIDRS}" \
+            -var="otlp_allowed_cidrs=${OTLP_ALLOWED_CIDRS}" \
+            -var="ssh_allowed_cidrs=${SSH_ALLOWED_CIDRS}"
+
+      - name: Emit managed-suite results
+        id: managed-suite-results
+        run: |
+          if [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
+            GRAFANA_URL="$(terraform -chdir=platform-repo/infra/terraform/managed-suite output -raw grafana_url)"
+            OTLP_HTTP_ENDPOINT="$(terraform -chdir=platform-repo/infra/terraform/managed-suite output -raw otlp_http_endpoint)"
+            {
+              echo "managed_suite_enabled=true"
+              echo "managed_suite_grafana_url=$GRAFANA_URL"
+              echo "managed_suite_otlp_http_endpoint=$OTLP_HTTP_ENDPOINT"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "managed_suite_enabled=false"
+              echo "managed_suite_grafana_url="
+              echo "managed_suite_otlp_http_endpoint="
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve collector endpoint
+        id: resolve-collector
+        run: |
+          EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
+          if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
+            EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
+          fi
+          echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT" >> "$GITHUB_OUTPUT"
+
+      - name: Validate contract
+        id: validate
+        run: |
+          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
+          mkdir -p "$GITHUB_WORKSPACE/generated"
+          VALIDATION_MESSAGE="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl validate -f "$CONTRACT_PATH")"
+          printf '%s\n' "$VALIDATION_MESSAGE" > "$GITHUB_WORKSPACE/generated/validation.txt"
+          {
+            echo "validation_message<<EOF"
+            printf '%s\n' "$VALIDATION_MESSAGE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build plan
+        id: plan
+        run: |
+          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
+          PLAN_JSON="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl plan -f "$CONTRACT_PATH")"
+          printf '%s\n' "$PLAN_JSON" > "$GITHUB_WORKSPACE/generated/plan.json"
+          {
+            echo "plan_json<<EOF"
+            printf '%s\n' "$PLAN_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build bindings
+        id: bindings
+        if: ${{ inputs.generate_bindings }}
+        run: |
+          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
+          TARGET="${{ inputs.bindings_target }}"
+          if [ "$TARGET" != "aws-lambda" ]; then
+            echo "Unsupported bindings target: $TARGET" >&2
+            exit 1
+          fi
+
+          ARGS=(
+            "./cmd/o11yctl"
+            "bindings"
+            "aws-lambda"
+            "-f" "$CONTRACT_PATH"
+            "--mode" "${{ inputs.instrumentation_mode }}"
+            "--adot-layer-arn" "${{ inputs.adot_lambda_layer_arn }}"
+            "--collector-endpoint" "${{ steps.resolve-collector.outputs.effective_collector_endpoint }}"
+            "--collector-traces-endpoint" "${{ inputs.collector_traces_endpoint }}"
+            "--collector-metrics-endpoint" "${{ inputs.collector_metrics_endpoint }}"
+            "--direct-endpoint" "${{ inputs.direct_endpoint }}"
+            "--direct-traces-endpoint" "${{ inputs.direct_traces_endpoint }}"
+            "--direct-metrics-endpoint" "${{ inputs.direct_metrics_endpoint }}"
+            "--metric-export-interval-ms" "${{ inputs.metric_export_interval_ms }}"
+          )
+
+          if [ "${{ inputs.emf_compatibility_mode }}" = "true" ]; then
+            ARGS+=("--emf-compatibility-mode=true")
+          else
+            ARGS+=("--emf-compatibility-mode=false")
+          fi
+
+          BINDINGS_JSON="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run "${ARGS[@]}")"
+          printf '%s\n' "$BINDINGS_JSON" > "$GITHUB_WORKSPACE/generated/bindings.json"
+          {
+            echo "bindings_json<<EOF"
+            printf '%s\n' "$BINDINGS_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Default bindings output
+        id: bindings-default
+        if: ${{ !inputs.generate_bindings }}
+        run: echo "bindings_json=" >> "$GITHUB_OUTPUT"
+
+      - name: Upload generated artifacts
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: o11y-contract-results
+          path: generated/

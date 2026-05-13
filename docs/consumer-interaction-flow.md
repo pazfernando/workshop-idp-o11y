@@ -24,6 +24,8 @@ The application team does not request dashboards, collectors, alarms, or cloud r
 5. The application deployment injects the generated outputs into the workload runtime.
 6. Platform-managed assets such as dashboards, alerts, collector configs, and managed-suite assets are selected from the catalog and asset layers.
 
+For GitHub-based consumers, the recommended product interface is the reusable workflow documented in [client-consumption.md](client-consumption.md), which wraps validate, plan, bindings, and optional managed-suite provisioning behind a single platform-owned workflow call.
+
 ## Concrete Example
 
 The AWS Lambda example in [examples/contracts/aws-lambda-order-processing.yaml](../examples/contracts/aws-lambda-order-processing.yaml) follows this path:
@@ -69,6 +71,7 @@ The application team receives stable outputs rather than platform internals. Dep
 
 - [README.md](../README.md)
 - [architecture.md](architecture.md)
+- [client-consumption.md](client-consumption.md)
 - [operating-model.md](operating-model.md)
 - [observability-contract.md](observability-contract.md)
 - [contract-authoring-guide.md](contract-authoring-guide.md)

@@ -33,6 +33,7 @@ Today, the operational interface is split across a stateless control plane and a
 - `o11yctl plan`
 - `o11yctl bindings aws-lambda`
 - `o11yd` HTTP endpoints for remote `validate`, `plan`, and `bindings aws-lambda`
+- `.github/workflows/contract-consumer.yml` for GitHub-based client consumption
 - `infra/terraform/managed-suite`
 - `.github/workflows/managed-suite-apply.yml`
 - `.github/workflows/managed-suite-destroy.yml`

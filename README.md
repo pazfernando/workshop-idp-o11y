@@ -17,12 +17,13 @@ This repository provides:
 
 ## Current Product Interface
 
-The current operational interface includes both CLI and HTTP:
+The current operational interface includes CLI, HTTP, and reusable workflow consumption:
 
 - `o11yctl validate`
 - `o11yctl plan`
 - `o11yctl bindings aws-lambda`
 - `o11yd` HTTP control plane
+- reusable GitHub workflow for client CI/CD consumption
 - root platform-managed suite workflows and Terraform module
 
 Example commands:
@@ -38,6 +39,7 @@ go run ./cmd/o11yd -listen :8080
 
 - Product operating model: [docs/operating-model.md](docs/operating-model.md)
 - Platform consumer flow: [docs/consumer-interaction-flow.md](docs/consumer-interaction-flow.md)
+- Client consumption guide: [docs/client-consumption.md](docs/client-consumption.md)
 - Observability contract: [docs/observability-contract.md](docs/observability-contract.md)
 - Contract authoring guide: [docs/contract-authoring-guide.md](docs/contract-authoring-guide.md)
 - Control-plane API: [docs/control-plane-api.md](docs/control-plane-api.md)
@@ -121,6 +123,7 @@ sequenceDiagram
 - backend-neutral planning
 - AWS Lambda runtime bindings
 - HTTP API for `validate`, `plan`, and `bindings aws-lambda`
+- reusable GitHub workflow for validate, plan, bindings, and optional managed-suite deployment
 - root Terraform module for a platform-managed Grafana, Alloy, Prometheus, Loki, and Tempo suite
 - GitHub Actions workflows to apply or destroy the managed suite
 - reusable collector, dashboard, and alert asset layers
