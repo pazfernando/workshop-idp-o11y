@@ -1,0 +1,27 @@
+.DS_Store
+
+# Local build and tool caches
+.cache/
+
+# Terraform local working directories
+.terraform/
+**/.terraform/
+
+# Terraform state and local overrides
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Environment and secret files
+.env
+.env.*
+*.pem
+*.key
+
+# Editor and OS noise
+.idea/
+.vscode/
