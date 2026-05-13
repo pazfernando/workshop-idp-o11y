@@ -65,6 +65,9 @@ jobs:
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.name) }}
       GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD != '' && secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || vars.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || '' }}
+      GRAFANA_ALLOWED_CIDRS: ${{ inputs.grafana_allowed_cidrs }}
+      OTLP_ALLOWED_CIDRS: ${{ inputs.otlp_allowed_cidrs }}
+      SSH_ALLOWED_CIDRS: ${{ inputs.ssh_allowed_cidrs }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -130,9 +133,9 @@ jobs:
             -var="dashboard_uid=${{ inputs.dashboard_uid }}" \
             -var="dashboard_title=${{ inputs.dashboard_title }}" \
             -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
-            -var="grafana_allowed_cidrs=${{ inputs.grafana_allowed_cidrs }}" \
-            -var="otlp_allowed_cidrs=${{ inputs.otlp_allowed_cidrs }}" \
-            -var="ssh_allowed_cidrs=${{ inputs.ssh_allowed_cidrs }}"
+            -var="grafana_allowed_cidrs=${GRAFANA_ALLOWED_CIDRS}" \
+            -var="otlp_allowed_cidrs=${OTLP_ALLOWED_CIDRS}" \
+            -var="ssh_allowed_cidrs=${SSH_ALLOWED_CIDRS}"
 
       - name: Show managed-suite outputs
         run: terraform -chdir=infra/terraform/managed-suite output
