@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"otel_bindings","Source":"../../../adapter/aws/terraform/modules/lambda-otel-bindings","Dir":"../../../adapter/aws/terraform/modules/lambda-otel-bindings"}]}

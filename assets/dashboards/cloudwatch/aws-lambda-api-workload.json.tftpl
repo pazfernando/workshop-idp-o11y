@@ -1,0 +1,95 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "API Traffic And Errors",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": [
+          ["AWS/ApiGateway", "Count", "ApiId", "${api_id}", "Stage", "${api_stage}", { "stat": "Sum", "label": "Requests" }],
+          [".", "4xx", ".", ".", ".", ".", { "stat": "Sum", "label": "4xx" }],
+          [".", "5xx", ".", ".", ".", ".", { "stat": "Sum", "label": "5xx" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "API Latency",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": [
+          ["AWS/ApiGateway", "Latency", "ApiId", "${api_id}", "Stage", "${api_stage}", { "stat": "Average", "label": "LatencyMs" }],
+          [".", "IntegrationLatency", ".", ".", ".", ".", { "stat": "Average", "label": "IntegrationLatencyMs" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Lambda Errors",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": ${lambda_error_metrics_json}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Lambda Duration",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": ${lambda_duration_metrics_json}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Lambda Throttles",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": ${lambda_throttle_metrics_json}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Lambda Concurrent Executions",
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${aws_region}",
+        "metrics": ${lambda_concurrency_metrics_json}
+      }
+    }
+  ]
+}

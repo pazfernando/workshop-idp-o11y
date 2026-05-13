@@ -1,0 +1,18 @@
+apiVersion: observability.platform/v1alpha1
+kind: PlatformClass
+metadata:
+  name: aws-serverless-api-observability
+  layer: catalog
+spec:
+  target: aws
+  runtime: aws-lambda
+  purpose: Starter class for dashboards, alerts, and managed-suite assets around API Gateway plus Lambda workloads.
+  contractMapping:
+    dashboardPresets:
+      - serverless-api
+  templates:
+    cloudwatchDashboard: assets/dashboards/cloudwatch/aws-lambda-api-workload.json.tftpl
+    grafanaStarterDashboard: assets/collector/managed-suite/grafana-dashboard.json.tftpl
+  notes:
+    - The CloudWatch dashboard template is runtime-generic and expects API plus Lambda identifiers as inputs.
+    - The Grafana starter dashboard is a preset artifact and should be paired with a class-specific metric catalog before broad reuse.

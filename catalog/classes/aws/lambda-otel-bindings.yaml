@@ -1,0 +1,17 @@
+apiVersion: observability.platform/v1alpha1
+kind: PlatformClass
+metadata:
+  name: aws-lambda-otel-bindings
+  layer: adapter
+spec:
+  target: aws
+  runtime: aws-lambda
+  purpose: Materialize runtime bindings for OpenTelemetry-enabled AWS Lambda consumers.
+  adapter:
+    cliCommand: o11yctl bindings aws-lambda
+    terraformModule: adapter/aws/terraform/modules/lambda-otel-bindings
+  outputs:
+    - environment
+    - layers
+    - managedPolicies
+    - requiredInputs

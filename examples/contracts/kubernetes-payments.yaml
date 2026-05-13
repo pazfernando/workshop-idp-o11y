@@ -1,0 +1,95 @@
+apiVersion: observability.platform/v1alpha1
+kind: ObservabilityContract
+metadata:
+  name: payments-api
+  owner: payments-platform
+  system: checkout
+  environment: prod
+  labels:
+    app.kubernetes.io/name: payments-api
+    app.kubernetes.io/part-of: checkout
+    platform.io/workload-class: kubernetes
+spec:
+  service:
+    name: payments-api
+    runtime: kubernetes
+    language: go
+    framework: http-api
+    tier: "1"
+    lifecycle: production
+  delivery:
+    mode: provision
+    target: kubernetes
+    cluster: prod-us-east-1
+    namespace: payments
+  telemetry:
+    openTelemetry:
+      enabled: true
+      semanticConventions: opentelemetry
+      propagators:
+        - tracecontext
+        - baggage
+      sampling:
+        strategy: parentbased_traceidratio
+        ratio: 0.25
+    resourceAttributes:
+      service.name: payments-api
+      service.namespace: checkout
+      deployment.environment: prod
+      k8s.namespace.name: payments
+    signals:
+      traces:
+        enabled: true
+        ingestion: collector
+        backendClass: traces-standard
+      metrics:
+        enabled: true
+        ingestion: collector
+        backendClass: metrics-standard
+        catalog:
+          - name: HttpServerRequests
+            type: histogram
+            unit: ms
+            description: Server request latency.
+            dimensions: [http.route, http.request.method, http.response.status_code]
+          - name: PaymentAuthorizations
+            type: counter
+            unit: "{authorization}"
+            description: Payment authorization attempts.
+            dimensions: [result, provider]
+      logs:
+        enabled: true
+        ingestion: collector
+        backendClass: logs-standard
+        format: json
+  capabilities:
+    dashboards:
+      enabled: true
+      preset: kubernetes-http-service
+    alerts:
+      enabled: true
+      rules:
+        - name: elevated-5xx-rate
+          summary: Elevated 5xx rate on payments API.
+          severity: critical
+          condition: rate(http_server_errors[5m]) > 0.05
+          for: 5m
+    slos:
+      enabled: true
+      objectives:
+        - name: payments-api-availability
+          description: Successful payment API responses over total requests.
+          indicator: availability
+          target: 99.95
+          window: 30d
+        - name: payments-api-latency
+          description: Requests below the latency threshold.
+          indicator: latency
+          target: 99
+          window: 30d
+    dataManagement:
+      retention:
+        tracesDays: 15
+        metricsDays: 90
+        logsDays: 30
+      dataClassification: confidential

@@ -1,0 +1,553 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/observability-contract.schema.json",
+  "title": "Observability Contract",
+  "description": "Declarative contract used by an application to request observability capabilities from an internal developer platform.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "pattern": "^[a-z0-9.-]+/[a-z0-9]+$"
+    },
+    "kind": {
+      "type": "string",
+      "const": "ObservabilityContract"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "owner",
+        "system",
+        "environment"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 3
+        },
+        "system": {
+          "type": "string",
+          "minLength": 3
+        },
+        "environment": {
+          "type": "string",
+          "enum": [
+            "dev",
+            "test",
+            "staging",
+            "prod"
+          ]
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "delivery",
+        "telemetry",
+        "capabilities"
+      ],
+      "properties": {
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "runtime",
+            "language",
+            "framework"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "runtime": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "framework": {
+              "type": "string"
+            },
+            "tier": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1",
+                "2",
+                "3"
+              ]
+            },
+            "lifecycle": {
+              "type": "string",
+              "enum": [
+                "experimental",
+                "production"
+              ]
+            }
+          }
+        },
+        "delivery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "target"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "provision",
+                "adopt"
+              ]
+            },
+            "target": {
+              "type": "string",
+              "enum": [
+                "aws",
+                "kubernetes",
+                "hybrid"
+              ]
+            },
+            "accountId": {
+              "type": "string",
+              "pattern": "^[0-9]{12}$"
+            },
+            "region": {
+              "type": "string"
+            }
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "openTelemetry",
+            "resourceAttributes",
+            "signals"
+          ],
+          "properties": {
+            "openTelemetry": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled",
+                "semanticConventions",
+                "propagators"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "semanticConventions": {
+                  "type": "string"
+                },
+                "propagators": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tracecontext",
+                      "baggage",
+                      "b3",
+                      "b3multi",
+                      "jaeger",
+                      "xray"
+                    ]
+                  }
+                },
+                "sampling": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "strategy": {
+                      "type": "string",
+                      "enum": [
+                        "parentbased_always_on",
+                        "parentbased_traceidratio",
+                        "always_on",
+                        "always_off"
+                      ]
+                    },
+                    "ratio": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            },
+            "resourceAttributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "required": [
+                "service.name",
+                "service.namespace",
+                "deployment.environment"
+              ],
+              "properties": {
+                "service.name": {
+                  "type": "string"
+                },
+                "service.namespace": {
+                  "type": "string"
+                },
+                "service.version": {
+                  "type": "string"
+                },
+                "deployment.environment": {
+                  "type": "string"
+                }
+              }
+            },
+            "signals": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "traces",
+                "metrics",
+                "logs"
+              ],
+              "properties": {
+                "traces": {
+                  "$ref": "#/$defs/signalSpec"
+                },
+                "metrics": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/signalSpec"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "catalog": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/metricSpec"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "logs": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/signalSpec"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "json",
+                            "text"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dashboards": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "preset": {
+                  "type": "string"
+                }
+              }
+            },
+            "alerts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/alertRule"
+                  }
+                }
+              }
+            },
+            "slos": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "objectives": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/sloObjective"
+                  }
+                }
+              }
+            },
+            "dataManagement": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "retention": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "tracesDays": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "metricsDays": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "logsDays": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                },
+                "dataClassification": {
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "internal",
+                    "confidential",
+                    "restricted"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "Pending",
+            "Provisioning",
+            "Ready",
+            "Failed"
+          ]
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "status"
+            ],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "True",
+                  "False",
+                  "Unknown"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "signalSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "backendClass"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backendClass": {
+          "type": "string"
+        },
+        "ingestion": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "collector"
+          ]
+        }
+      }
+    },
+    "metricSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "unit",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "counter",
+            "histogram",
+            "gauge"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "alertRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "summary",
+        "severity",
+        "condition"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "condition": {
+          "type": "string"
+        },
+        "for": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h|d)$"
+        },
+        "runbookUrl": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "sloObjective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "indicator",
+        "target",
+        "window"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "indicator": {
+          "type": "string"
+        },
+        "target": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "window": {
+          "type": "string",
+          "pattern": "^[0-9]+d$"
+        }
+      }
+    }
+  }
+}

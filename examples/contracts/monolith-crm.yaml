@@ -1,0 +1,86 @@
+apiVersion: observability.platform/v1alpha1
+kind: ObservabilityContract
+metadata:
+  name: crm-monolith
+  owner: business-systems
+  system: crm
+  environment: staging
+  labels:
+    app.kubernetes.io/name: crm-monolith
+    platform.io/workload-class: monolith
+spec:
+  service:
+    name: crm-monolith
+    runtime: vm
+    language: java
+    framework: spring-boot
+    tier: "2"
+    lifecycle: production
+  delivery:
+    mode: adopt
+    target: hybrid
+  telemetry:
+    openTelemetry:
+      enabled: true
+      semanticConventions: opentelemetry
+      propagators:
+        - tracecontext
+        - baggage
+      sampling:
+        strategy: parentbased_traceidratio
+        ratio: 0.1
+    resourceAttributes:
+      service.name: crm-monolith
+      service.namespace: crm
+      deployment.environment: staging
+    signals:
+      traces:
+        enabled: true
+        ingestion: collector
+        backendClass: traces-standard
+      metrics:
+        enabled: true
+        ingestion: collector
+        backendClass: metrics-standard
+        catalog:
+          - name: CustomerSearchLatency
+            type: histogram
+            unit: ms
+            description: Latency of customer search operations.
+            dimensions: [operation]
+          - name: CustomerSearchErrors
+            type: counter
+            unit: "{error}"
+            description: Errors during customer search.
+            dimensions: [operation]
+      logs:
+        enabled: true
+        ingestion: collector
+        backendClass: logs-standard
+        format: json
+  capabilities:
+    dashboards:
+      enabled: true
+      preset: monolith-business-app
+    alerts:
+      enabled: true
+      rules:
+        - name: crm-search-errors
+          summary: CRM search errors above threshold.
+          severity: medium
+          condition: sum(CustomerSearchErrors) > 5
+          for: 10m
+    slos:
+      enabled: true
+      objectives:
+        - name: crm-search-availability
+          description: Successful customer search requests over total search requests.
+          indicator: availability
+          target: 99.5
+          window: 30d
+    dataManagement:
+      retention:
+        tracesDays: 7
+        metricsDays: 60
+        logsDays: 14
+      dataClassification: internal

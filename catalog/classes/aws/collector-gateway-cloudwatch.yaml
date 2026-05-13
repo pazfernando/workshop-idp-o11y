@@ -1,0 +1,27 @@
+apiVersion: observability.platform/v1alpha1
+kind: PlatformClass
+metadata:
+  name: aws-collector-gateway-cloudwatch
+  layer: catalog
+spec:
+  target: aws
+  purpose: Collector pipeline preset for AWS-native trace and metric export with optional third-party fan-out.
+  contractMapping:
+    backendClasses:
+      traces:
+        - traces-standard
+      metrics:
+        - metrics-standard
+      logs:
+        - logs-standard
+  assets:
+    defaultConfig: assets/collector/aws/collector-cloudwatch.yaml
+    fanOutConfig: assets/collector/aws/collector-cloudwatch-third-party.yaml
+    managedSuite: assets/collector/managed-suite
+  supports:
+    ingestion:
+      - collector
+    signals:
+      - traces
+      - metrics
+      - logs
