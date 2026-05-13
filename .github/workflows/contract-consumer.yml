@@ -416,6 +416,80 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Generate client handoff package
+        id: handoff
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/generated/client-handoff"
+
+          if [ -f "$GITHUB_WORKSPACE/generated/bindings.json" ]; then
+            BINDINGS_PRESENT=true
+          else
+            BINDINGS_PRESENT=false
+          fi
+
+          cat > "$GITHUB_WORKSPACE/generated/client-handoff/implementation-summary.md" <<EOF
+          # Observability Implementation Summary
+
+          ## Delivery Context
+
+          - Contract path: \`${{ inputs.contract_path }}\`
+          - Bindings target: \`${{ inputs.bindings_target }}\`
+          - Bindings generated: \`${{ inputs.generate_bindings }}\`
+          - Managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`
+          - AWS region: \`${{ inputs.aws_region }}\`
+
+          ## Effective Runtime Integration
+
+          - Instrumentation mode: \`${{ inputs.instrumentation_mode }}\`
+          - Effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`
+          - EMF compatibility mode: \`${{ inputs.emf_compatibility_mode }}\`
+          - Metric export interval ms: \`${{ inputs.metric_export_interval_ms }}\`
+
+          ## Platform Endpoints
+
+          - Managed suite Grafana URL: \`${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}\`
+          - Managed suite OTLP HTTP endpoint: \`${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}\`
+
+          ## Delivered Files
+
+          - \`validation.txt\`
+          - \`plan.json\`
+          - \`bindings.json\` when bindings are enabled
+          - \`implementation-summary.md\`
+          - \`implementation-manifest.json\`
+
+          ## Client Next Steps
+
+          1. Review \`validation.txt\` to confirm the contract passed platform validation.
+          2. Review \`plan.json\` to understand the neutral platform plan.
+          3. If present, consume \`bindings.json\` in the deployment step that injects runtime configuration.
+          4. If the managed suite was deployed, use the Grafana URL and OTLP endpoint above for access and integration.
+          EOF
+
+          cat > "$GITHUB_WORKSPACE/generated/client-handoff/implementation-manifest.json" <<EOF
+          {
+            "contractPath": "${{ inputs.contract_path }}",
+            "bindingsTarget": "${{ inputs.bindings_target }}",
+            "bindingsGenerated": ${{ inputs.generate_bindings }},
+            "bindingsPresent": ${BINDINGS_PRESENT},
+            "managedSuiteEnabled": ${{ steps.managed-suite-results.outputs.managed_suite_enabled }},
+            "awsRegion": "${{ inputs.aws_region }}",
+            "instrumentationMode": "${{ inputs.instrumentation_mode }}",
+            "effectiveCollectorEndpoint": "${{ steps.resolve-collector.outputs.effective_collector_endpoint }}",
+            "managedSuiteGrafanaUrl": "${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}",
+            "managedSuiteOtlpHttpEndpoint": "${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}",
+            "metricExportIntervalMs": ${{ inputs.metric_export_interval_ms }},
+            "emfCompatibilityMode": ${{ inputs.emf_compatibility_mode }}
+          }
+          EOF
+
+          cp "$GITHUB_WORKSPACE/generated/validation.txt" "$GITHUB_WORKSPACE/generated/client-handoff/validation.txt"
+          cp "$GITHUB_WORKSPACE/generated/plan.json" "$GITHUB_WORKSPACE/generated/client-handoff/plan.json"
+          if [ -f "$GITHUB_WORKSPACE/generated/bindings.json" ]; then
+            cp "$GITHUB_WORKSPACE/generated/bindings.json" "$GITHUB_WORKSPACE/generated/client-handoff/bindings.json"
+          fi
+
       - name: Workflow summary
         if: ${{ always() }}
         run: |
@@ -441,3 +515,10 @@ jobs:
         with:
           name: o11y-contract-results
           path: generated/
+
+      - name: Upload client handoff artifact
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: o11y-client-handoff
+          path: generated/client-handoff/

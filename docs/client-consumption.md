@@ -100,6 +100,11 @@ Artifacts:
 - `generated/validation.txt`
 - `generated/plan.json`
 - `generated/bindings.json` when bindings are enabled
+- `generated/client-handoff/implementation-summary.md`
+- `generated/client-handoff/implementation-manifest.json`
+- uploaded artifact `o11y-client-handoff`
+
+The `o11y-client-handoff` artifact is the client-facing delivery package after the platform workflow finishes. It is intended to be the easiest thing for the client team to download, inspect, and pass to the deployment owner.
 
 ## Required Secrets For Managed Suite Deployment
 
