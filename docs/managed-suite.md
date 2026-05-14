@@ -119,4 +119,4 @@ The destroy workflow reuses the same state key and destroys that same Terraform 
 
 - The suite is EC2-based and stateful at the infrastructure layer.
 - The repository now owns the reusable deployment path, but persistent reconciliation still depends on Terraform state stored in S3 rather than local state files.
-- The default dashboard is generic platform observability, not tied to a sample workload.
+- The suite still provisions a default platform dashboard, and the contract-consumer path can now publish workload-specific dashboards into the same Grafana instance.

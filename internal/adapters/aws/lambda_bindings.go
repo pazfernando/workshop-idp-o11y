@@ -61,7 +61,6 @@ type AssetReferences struct {
 	CollectorConfig           string `json:"collectorConfig,omitempty"`
 	CollectorThirdPartyConfig string `json:"collectorThirdPartyConfig,omitempty"`
 	ManagedSuitePath          string `json:"managedSuitePath,omitempty"`
-	CloudWatchDashboard       string `json:"cloudWatchDashboard,omitempty"`
 }
 
 type BindingOutputs struct {
@@ -200,7 +199,6 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 			CollectorConfig:           "assets/collector/aws/collector-cloudwatch.yaml",
 			CollectorThirdPartyConfig: "assets/collector/aws/collector-cloudwatch-third-party.yaml",
 			ManagedSuitePath:          "assets/collector/managed-suite",
-			CloudWatchDashboard:       "assets/dashboards/cloudwatch/aws-lambda-api-workload.json.tftpl",
 		},
 		Outputs: outputs,
 		Notes:   notes,

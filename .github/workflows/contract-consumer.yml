@@ -77,6 +77,11 @@ on:
         required: false
         default: false
         type: boolean
+      reuse_managed_suite:
+        description: Reuse an existing platform-managed suite by reading its Terraform state outputs.
+        required: false
+        default: true
+        type: boolean
       aws_region:
         description: AWS region used when deploy_managed_suite is enabled.
         required: false
@@ -138,14 +143,23 @@ on:
         description: Target-specific bindings JSON when generate_bindings is enabled.
         value: ${{ jobs.contract.outputs.bindings_json }}
       managed_suite_enabled:
-        description: Whether the managed suite was deployed by the workflow.
+        description: Whether the managed suite was available to the workflow.
         value: ${{ jobs.contract.outputs.managed_suite_enabled }}
       managed_suite_grafana_url:
-        description: Grafana URL when the managed suite was deployed.
+        description: Grafana URL when the managed suite was available.
         value: ${{ jobs.contract.outputs.managed_suite_grafana_url }}
       managed_suite_otlp_http_endpoint:
-        description: Alloy OTLP HTTP endpoint when the managed suite was deployed.
+        description: Alloy OTLP HTTP endpoint when the managed suite was available.
         value: ${{ jobs.contract.outputs.managed_suite_otlp_http_endpoint }}
+      workload_dashboard_backend:
+        description: Backend that materialized the workload dashboard.
+        value: ${{ jobs.contract.outputs.workload_dashboard_backend }}
+      workload_dashboard_uid:
+        description: Workload dashboard UID when the platform materialized one.
+        value: ${{ jobs.contract.outputs.workload_dashboard_uid }}
+      workload_dashboard_url:
+        description: Workload dashboard URL when the platform materialized one.
+        value: ${{ jobs.contract.outputs.workload_dashboard_url }}
       effective_collector_endpoint:
         description: Effective collector endpoint used for bindings generation.
         value: ${{ jobs.contract.outputs.effective_collector_endpoint }}
@@ -159,24 +173,21 @@ jobs:
     permissions:
       contents: read
     outputs:
-      validation_message: ${{ steps.validate.outputs.validation_message }}
-      plan_json: ${{ steps.plan.outputs.plan_json }}
-      bindings_json: ${{ steps.bindings.outputs.bindings_json }}
-      managed_suite_enabled: ${{ steps.managed-suite-results.outputs.managed_suite_enabled }}
-      managed_suite_grafana_url: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
-      managed_suite_otlp_http_endpoint: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
-      effective_collector_endpoint: ${{ steps.resolve-collector.outputs.effective_collector_endpoint }}
-      effective_collector_source: ${{ steps.resolve-collector.outputs.effective_collector_source }}
-    env:
-      AWS_REGION: ${{ inputs.aws_region }}
-      MANAGED_SUITE_NAME: ${{ inputs.managed_suite_name }}
-      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.managed_suite_name) }}
-      GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD != '' && secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || vars.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || '' }}
-      GRAFANA_ALLOWED_CIDRS: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
-      OTLP_ALLOWED_CIDRS: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
-      SSH_ALLOWED_CIDRS: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
+      validation_message: ${{ steps.contract-consumer.outputs.validation_message }}
+      plan_json: ${{ steps.contract-consumer.outputs.plan_json }}
+      bindings_json: ${{ steps.contract-consumer.outputs.bindings_json }}
+      managed_suite_enabled: ${{ steps.contract-consumer.outputs.managed_suite_enabled }}
+      managed_suite_grafana_url: ${{ steps.contract-consumer.outputs.managed_suite_grafana_url }}
+      managed_suite_otlp_http_endpoint: ${{ steps.contract-consumer.outputs.managed_suite_otlp_http_endpoint }}
+      workload_dashboard_backend: ${{ steps.contract-consumer.outputs.workload_dashboard_backend }}
+      workload_dashboard_uid: ${{ steps.contract-consumer.outputs.workload_dashboard_uid }}
+      workload_dashboard_url: ${{ steps.contract-consumer.outputs.workload_dashboard_url }}
+      effective_collector_endpoint: ${{ steps.contract-consumer.outputs.effective_collector_endpoint }}
+      effective_collector_source: ${{ steps.contract-consumer.outputs.effective_collector_source }}
     steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
       - name: Checkout platform repository
         uses: actions/checkout@v4
         with:
@@ -184,534 +195,40 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: platform-repo
 
-      - name: Checkout caller repository
-        uses: actions/checkout@v4
+      - name: Run contract consumer
+        id: contract-consumer
+        uses: ./platform-repo/.github/actions/contract-consumer
         with:
-          path: client-repo
-
-      - name: Preflight workflow inputs
+          contract_path: ${{ inputs.contract_path }}
+          upload_artifacts: ${{ inputs.upload_artifacts }}
+          generate_bindings: ${{ inputs.generate_bindings }}
+          bindings_target: ${{ inputs.bindings_target }}
+          instrumentation_mode: ${{ inputs.instrumentation_mode }}
+          adot_lambda_layer_arn: ${{ inputs.adot_lambda_layer_arn }}
+          collector_endpoint: ${{ inputs.collector_endpoint }}
+          collector_traces_endpoint: ${{ inputs.collector_traces_endpoint }}
+          collector_metrics_endpoint: ${{ inputs.collector_metrics_endpoint }}
+          direct_endpoint: ${{ inputs.direct_endpoint }}
+          direct_traces_endpoint: ${{ inputs.direct_traces_endpoint }}
+          direct_metrics_endpoint: ${{ inputs.direct_metrics_endpoint }}
+          metric_export_interval_ms: ${{ inputs.metric_export_interval_ms }}
+          emf_compatibility_mode: ${{ inputs.emf_compatibility_mode }}
+          deploy_managed_suite: ${{ inputs.deploy_managed_suite }}
+          reuse_managed_suite: ${{ inputs.reuse_managed_suite }}
+          aws_region: ${{ inputs.aws_region }}
+          managed_suite_name: ${{ inputs.managed_suite_name }}
+          managed_suite_subnet_id: ${{ inputs.managed_suite_subnet_id }}
+          managed_suite_instance_type: ${{ inputs.managed_suite_instance_type }}
+          managed_suite_root_volume_size_gb: ${{ inputs.managed_suite_root_volume_size_gb }}
+          managed_suite_dashboard_uid: ${{ inputs.managed_suite_dashboard_uid }}
+          managed_suite_dashboard_title: ${{ inputs.managed_suite_dashboard_title }}
+          managed_suite_grafana_allowed_cidrs: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
+          managed_suite_otlp_allowed_cidrs: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
+          managed_suite_ssh_allowed_cidrs: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
         env:
-          CONTRACT_PATH_INPUT: ${{ inputs.contract_path }}
-          GENERATE_BINDINGS: ${{ inputs.generate_bindings }}
-          BINDINGS_TARGET: ${{ inputs.bindings_target }}
-          INSTRUMENTATION_MODE: ${{ inputs.instrumentation_mode }}
-          DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
-          MANAGED_SUITE_NAME_INPUT: ${{ inputs.managed_suite_name }}
-          GRAFANA_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
-          OTLP_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
-          SSH_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
-          COLLECTOR_ENDPOINT_INPUT: ${{ inputs.collector_endpoint }}
-        run: |
-          set -euo pipefail
-
-          case "$CONTRACT_PATH_INPUT" in
-            ""|/*|../*|*/../*|*..\\*)
-              echo "contract_path must be a relative path inside the caller repository." >&2
-              exit 1
-              ;;
-          esac
-
-          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/$CONTRACT_PATH_INPUT"
-          if [ ! -f "$CONTRACT_PATH" ]; then
-            echo "Contract file not found: $CONTRACT_PATH_INPUT" >&2
-            exit 1
-          fi
-
-          if [ "$GENERATE_BINDINGS" = "true" ] && [ "$BINDINGS_TARGET" != "aws-lambda" ]; then
-            echo "generate_bindings currently supports only bindings_target=aws-lambda." >&2
-            exit 1
-          fi
-
-          if [ "$INSTRUMENTATION_MODE" != "code" ] && [ "$INSTRUMENTATION_MODE" != "adot_layer" ]; then
-            echo "instrumentation_mode must be one of: code, adot_layer." >&2
-            exit 1
-          fi
-
-          if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -z "$MANAGED_SUITE_NAME_INPUT" ]; then
-            echo "managed_suite_name is required when deploy_managed_suite=true." >&2
-            exit 1
-          fi
-
-          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$GRAFANA_ALLOWED_CIDRS_INPUT"
-          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$OTLP_ALLOWED_CIDRS_INPUT"
-          python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$SSH_ALLOWED_CIDRS_INPUT"
-
-          if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -n "$COLLECTOR_ENDPOINT_INPUT" ]; then
-            echo "Explicit collector_endpoint provided. It will take precedence over the managed-suite OTLP endpoint."
-          fi
-
-      - name: Resolve Go version
-        id: go-version
-        run: |
-          set -euo pipefail
-          GO_VERSION_FILE="$GITHUB_WORKSPACE/platform-repo/go.mod"
-
-          if [ ! -f "$GO_VERSION_FILE" ]; then
-            echo "Unable to locate go.mod for the platform repository." >&2
-            exit 1
-          fi
-
-          GO_VERSION="$(sed -nE 's/^go[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/p' "$GO_VERSION_FILE" | head -n1)"
-          if [ -z "$GO_VERSION" ]; then
-            echo "Unable to determine Go version from $GO_VERSION_FILE." >&2
-            exit 1
-          fi
-
-          echo "version=$GO_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ steps.go-version.outputs.version }}
-
-      - name: Setup Terraform
-        if: ${{ inputs.deploy_managed_suite }}
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_wrapper: false
-
-      - name: Configure AWS credentials
-        if: ${{ inputs.deploy_managed_suite }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Ensure Terraform state bucket
-        if: ${{ inputs.deploy_managed_suite }}
-        run: |
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          if [ -n "$TF_STATE_BUCKET" ]; then
-            BUCKET_NAME="$TF_STATE_BUCKET"
-          else
-            PROJECT_SLUG="$(printf '%s' "$MANAGED_SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
-            PROJECT_SLUG="${PROJECT_SLUG#-}"
-            PROJECT_SLUG="${PROJECT_SLUG%-}"
-            BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
-            BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
-          fi
-
-          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-            echo "Using existing Terraform state bucket: $BUCKET_NAME"
-          else
-            if [ "$AWS_REGION" = "us-east-1" ]; then
-              aws s3api create-bucket --bucket "$BUCKET_NAME"
-            else
-              aws s3api create-bucket --bucket "$BUCKET_NAME" --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
-            fi
-
-            aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
-            aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-          fi
-
-          echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
-
-      - name: Initialize managed-suite Terraform
-        if: ${{ inputs.deploy_managed_suite }}
-        run: |
-          terraform -chdir=platform-repo/infra/terraform/managed-suite init -reconfigure \
-            -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="region=${AWS_REGION}"
-
-      - name: Apply managed suite
-        if: ${{ inputs.deploy_managed_suite }}
-        run: |
-          terraform -chdir=platform-repo/infra/terraform/managed-suite apply -auto-approve \
-            -var="aws_region=${AWS_REGION}" \
-            -var="name=${{ inputs.managed_suite_name }}" \
-            -var="subnet_id=${{ inputs.managed_suite_subnet_id }}" \
-            -var="instance_type=${{ inputs.managed_suite_instance_type }}" \
-            -var="root_volume_size_gb=${{ inputs.managed_suite_root_volume_size_gb }}" \
-            -var="dashboard_uid=${{ inputs.managed_suite_dashboard_uid }}" \
-            -var="dashboard_title=${{ inputs.managed_suite_dashboard_title }}" \
-            -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
-            -var="grafana_allowed_cidrs=${GRAFANA_ALLOWED_CIDRS}" \
-            -var="otlp_allowed_cidrs=${OTLP_ALLOWED_CIDRS}" \
-            -var="ssh_allowed_cidrs=${SSH_ALLOWED_CIDRS}"
-
-      - name: Emit managed-suite results
-        id: managed-suite-results
-        run: |
-          if [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
-            GRAFANA_URL="$(terraform -chdir=platform-repo/infra/terraform/managed-suite output -raw grafana_url)"
-            OTLP_HTTP_ENDPOINT="$(terraform -chdir=platform-repo/infra/terraform/managed-suite output -raw otlp_http_endpoint)"
-            {
-              echo "managed_suite_enabled=true"
-              echo "managed_suite_grafana_url=$GRAFANA_URL"
-              echo "managed_suite_otlp_http_endpoint=$OTLP_HTTP_ENDPOINT"
-            } >> "$GITHUB_OUTPUT"
-          else
-            {
-              echo "managed_suite_enabled=false"
-              echo "managed_suite_grafana_url="
-              echo "managed_suite_otlp_http_endpoint="
-            } >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Resolve collector endpoint
-        id: resolve-collector
-        run: |
-          set -euo pipefail
-          EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
-          EFFECTIVE_COLLECTOR_SOURCE="explicit"
-          if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
-            EFFECTIVE_COLLECTOR_SOURCE="none"
-          fi
-          if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
-            EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
-            EFFECTIVE_COLLECTOR_SOURCE="managed_suite"
-          fi
-          {
-            echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT"
-            echo "effective_collector_source=$EFFECTIVE_COLLECTOR_SOURCE"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Validate contract
-        id: validate
-        run: |
-          set -euo pipefail
-          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
-          mkdir -p "$GITHUB_WORKSPACE/generated"
-          VALIDATION_MESSAGE="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl validate -f "$CONTRACT_PATH")"
-          printf '%s\n' "$VALIDATION_MESSAGE" > "$GITHUB_WORKSPACE/generated/validation.txt"
-          {
-            echo "validation_message<<EOF"
-            printf '%s\n' "$VALIDATION_MESSAGE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Build plan
-        id: plan
-        run: |
-          set -euo pipefail
-          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
-          PLAN_JSON="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run ./cmd/o11yctl plan -f "$CONTRACT_PATH")"
-          printf '%s\n' "$PLAN_JSON" > "$GITHUB_WORKSPACE/generated/plan.json"
-          {
-            echo "plan_json<<EOF"
-            printf '%s\n' "$PLAN_JSON"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Build bindings
-        id: bindings
-        if: ${{ inputs.generate_bindings }}
-        run: |
-          set -euo pipefail
-          CONTRACT_PATH="$GITHUB_WORKSPACE/client-repo/${{ inputs.contract_path }}"
-          TARGET="${{ inputs.bindings_target }}"
-          if [ "$TARGET" != "aws-lambda" ]; then
-            echo "Unsupported bindings target: $TARGET" >&2
-            exit 1
-          fi
-
-          ARGS=(
-            "./cmd/o11yctl"
-            "bindings"
-            "aws-lambda"
-            "-f" "$CONTRACT_PATH"
-            "--mode" "${{ inputs.instrumentation_mode }}"
-            "--adot-layer-arn" "${{ inputs.adot_lambda_layer_arn }}"
-            "--collector-endpoint" "${{ steps.resolve-collector.outputs.effective_collector_endpoint }}"
-            "--collector-traces-endpoint" "${{ inputs.collector_traces_endpoint }}"
-            "--collector-metrics-endpoint" "${{ inputs.collector_metrics_endpoint }}"
-            "--direct-endpoint" "${{ inputs.direct_endpoint }}"
-            "--direct-traces-endpoint" "${{ inputs.direct_traces_endpoint }}"
-            "--direct-metrics-endpoint" "${{ inputs.direct_metrics_endpoint }}"
-            "--metric-export-interval-ms" "${{ inputs.metric_export_interval_ms }}"
-          )
-
-          if [ "${{ inputs.emf_compatibility_mode }}" = "true" ]; then
-            ARGS+=("--emf-compatibility-mode=true")
-          else
-            ARGS+=("--emf-compatibility-mode=false")
-          fi
-
-          BINDINGS_JSON="$(cd "$GITHUB_WORKSPACE/platform-repo" && go run "${ARGS[@]}")"
-          printf '%s\n' "$BINDINGS_JSON" > "$GITHUB_WORKSPACE/generated/bindings.json"
-          {
-            echo "bindings_json<<EOF"
-            printf '%s\n' "$BINDINGS_JSON"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Generate client handoff package
-        id: handoff
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/generated/client-handoff"
-
-          if [ -f "$GITHUB_WORKSPACE/generated/bindings.json" ]; then
-            BINDINGS_PRESENT=true
-          else
-            BINDINGS_PRESENT=false
-          fi
-
-          export CONTRACT_PATH_INPUT="${{ inputs.contract_path }}"
-          export BINDINGS_TARGET_INPUT="${{ inputs.bindings_target }}"
-          export GENERATE_BINDINGS_INPUT="${{ inputs.generate_bindings }}"
-          export BINDINGS_PRESENT
-          export MANAGED_SUITE_ENABLED="${{ steps.managed-suite-results.outputs.managed_suite_enabled }}"
-          export AWS_REGION_INPUT="${{ inputs.aws_region }}"
-          export EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.resolve-collector.outputs.effective_collector_endpoint }}"
-          export EFFECTIVE_COLLECTOR_SOURCE="${{ steps.resolve-collector.outputs.effective_collector_source }}"
-          export MANAGED_SUITE_GRAFANA_URL="${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}"
-          export MANAGED_SUITE_OTLP_HTTP_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
-          export INSTRUMENTATION_MODE_INPUT="${{ inputs.instrumentation_mode }}"
-          export ADOT_LAMBDA_LAYER_ARN_INPUT="${{ inputs.adot_lambda_layer_arn }}"
-          export DIRECT_ENDPOINT_INPUT="${{ inputs.direct_endpoint }}"
-          export DIRECT_TRACES_ENDPOINT_INPUT="${{ inputs.direct_traces_endpoint }}"
-          export DIRECT_METRICS_ENDPOINT_INPUT="${{ inputs.direct_metrics_endpoint }}"
-          export COLLECTOR_TRACES_ENDPOINT_INPUT="${{ inputs.collector_traces_endpoint }}"
-          export COLLECTOR_METRICS_ENDPOINT_INPUT="${{ inputs.collector_metrics_endpoint }}"
-          export EMF_COMPATIBILITY_MODE_INPUT="${{ inputs.emf_compatibility_mode }}"
-          export METRIC_EXPORT_INTERVAL_MS_INPUT="${{ inputs.metric_export_interval_ms }}"
-          export GENERATED_DIR="$GITHUB_WORKSPACE/generated"
-          export HANDOFF_DIR="$GITHUB_WORKSPACE/generated/client-handoff"
-
-          python3 <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          generated_dir = Path(os.environ["GENERATED_DIR"])
-          handoff_dir = Path(os.environ["HANDOFF_DIR"])
-          bindings_present = os.environ["BINDINGS_PRESENT"] == "true"
-
-          binding_details = {
-              "instrumentationMode": os.environ["INSTRUMENTATION_MODE_INPUT"],
-              "exportStrategy": "unknown",
-              "otlpAuthenticationMode": "unknown",
-              "effectiveOtlpBaseEndpoint": "",
-              "effectiveOtlpTracesEndpoint": "",
-              "effectiveOtlpMetricsEndpoint": "",
-              "lambdaExecWrapper": "",
-              "adotLambdaLayerArn": os.environ["ADOT_LAMBDA_LAYER_ARN_INPUT"],
-              "layerCount": 0,
-              "managedPolicyCount": 0,
-              "requiredInputs": [],
-              "notes": [],
-              "emfCompatibilityMode": os.environ["EMF_COMPATIBILITY_MODE_INPUT"] == "true",
-              "metricExportIntervalMs": int(os.environ["METRIC_EXPORT_INTERVAL_MS_INPUT"]),
-          }
-          metric_coverage = {
-              "supportPolicy": "unknown",
-              "dashboardPreset": "",
-              "requestedMetricNames": [],
-              "supportedMetricNames": [],
-              "recommendedRuntimeMetrics": [],
-          }
-
-          plan = json.loads((generated_dir / "plan.json").read_text())
-          for capability in plan.get("capabilities", []):
-              if capability.get("name") == "metrics-pipeline":
-                  properties = capability.get("properties", {})
-                  metric_coverage.update({
-                      "supportPolicy": properties.get("metricSupportPolicy", "unknown"),
-                      "dashboardPreset": properties.get("dashboardPreset", ""),
-                      "requestedMetricNames": properties.get("metricNames", []),
-                      "supportedMetricNames": properties.get("supportedMetricNames", []),
-                      "recommendedRuntimeMetrics": properties.get("recommendedRuntimeMetrics", []),
-                  })
-                  break
-
-          if bindings_present:
-              bindings = json.loads((generated_dir / "bindings.json").read_text())
-              instr = bindings.get("instrumentation", {})
-              outputs = bindings.get("outputs", {})
-              binding_details.update({
-                  "instrumentationMode": instr.get("mode", binding_details["instrumentationMode"]),
-                  "exportStrategy": instr.get("exportStrategy", "unknown"),
-                  "otlpAuthenticationMode": instr.get("otlpAuthenticationMode", "unknown"),
-                  "effectiveOtlpBaseEndpoint": outputs.get("otlpBaseEndpoint", ""),
-                  "effectiveOtlpTracesEndpoint": outputs.get("otlpTracesEndpoint", ""),
-                  "effectiveOtlpMetricsEndpoint": outputs.get("otlpMetricsEndpoint", ""),
-                  "lambdaExecWrapper": outputs.get("lambdaExecWrapper", ""),
-                  "adotLambdaLayerArn": outputs.get("adotLambdaLayerArn", binding_details["adotLambdaLayerArn"]),
-                  "layerCount": len(bindings.get("layers", [])),
-                  "managedPolicyCount": len(bindings.get("managedPolicies", [])),
-                  "requiredInputs": bindings.get("requiredInputs", []),
-                  "notes": bindings.get("notes", []),
-                  "emfCompatibilityMode": instr.get("emfCompatibilityMode", binding_details["emfCompatibilityMode"]),
-                  "metricExportIntervalMs": instr.get("metricExportIntervalMs", binding_details["metricExportIntervalMs"]),
-              })
-
-          direct_inputs = {
-              "base": os.environ["DIRECT_ENDPOINT_INPUT"],
-              "traces": os.environ["DIRECT_TRACES_ENDPOINT_INPUT"],
-              "metrics": os.environ["DIRECT_METRICS_ENDPOINT_INPUT"],
-          }
-          collector_inputs = {
-              "base": os.environ["EFFECTIVE_COLLECTOR_ENDPOINT"],
-              "traces": os.environ["COLLECTOR_TRACES_ENDPOINT_INPUT"],
-              "metrics": os.environ["COLLECTOR_METRICS_ENDPOINT_INPUT"],
-          }
-
-          artifact_files = [
-              "validation.txt",
-              "plan.json",
-              "implementation-summary.md",
-              "implementation-manifest.json",
-          ]
-          if bindings_present:
-              artifact_files.insert(2, "bindings.json")
-
-          manifest = {
-              "contractPath": os.environ["CONTRACT_PATH_INPUT"],
-              "bindingsTarget": os.environ["BINDINGS_TARGET_INPUT"],
-              "bindingsGenerated": os.environ["GENERATE_BINDINGS_INPUT"] == "true",
-              "bindingsPresent": bindings_present,
-              "managedSuiteEnabled": os.environ["MANAGED_SUITE_ENABLED"] == "true",
-              "awsRegion": os.environ["AWS_REGION_INPUT"],
-              "effectiveCollector": {
-                  "endpoint": os.environ["EFFECTIVE_COLLECTOR_ENDPOINT"],
-                  "source": os.environ["EFFECTIVE_COLLECTOR_SOURCE"],
-              },
-              "managedSuite": {
-                  "grafanaUrl": os.environ["MANAGED_SUITE_GRAFANA_URL"],
-                  "otlpHttpEndpoint": os.environ["MANAGED_SUITE_OTLP_HTTP_ENDPOINT"],
-              },
-              "bindingImplementation": binding_details,
-              "requestedInputEndpoints": {
-                  "collector": collector_inputs,
-                  "direct": direct_inputs,
-              },
-              "metricCoverage": metric_coverage,
-              "artifactsProduced": artifact_files,
-          }
-
-          summary_lines = [
-              "# Observability Implementation Summary",
-              "",
-              "## Delivery Context",
-              "",
-              f"- Contract path: `{manifest['contractPath']}`",
-              f"- Bindings target: `{manifest['bindingsTarget']}`",
-              f"- Bindings generated: `{str(manifest['bindingsGenerated']).lower()}`",
-              f"- Bindings present: `{str(manifest['bindingsPresent']).lower()}`",
-              f"- Managed suite deployed: `{str(manifest['managedSuiteEnabled']).lower()}`",
-              f"- AWS region: `{manifest['awsRegion']}`",
-              "",
-              "## Effective Runtime Integration",
-              "",
-              f"- Instrumentation mode: `{binding_details['instrumentationMode']}`",
-              f"- Export strategy: `{binding_details['exportStrategy']}`",
-              f"- OTLP authentication mode: `{binding_details['otlpAuthenticationMode']}`",
-              f"- EMF compatibility mode: `{str(binding_details['emfCompatibilityMode']).lower()}`",
-              f"- Metric export interval ms: `{binding_details['metricExportIntervalMs']}`",
-              f"- Effective collector endpoint: `{manifest['effectiveCollector']['endpoint']}`",
-              f"- Effective collector source: `{manifest['effectiveCollector']['source']}`",
-              f"- Effective OTLP base endpoint: `{binding_details['effectiveOtlpBaseEndpoint']}`",
-              f"- Effective OTLP traces endpoint: `{binding_details['effectiveOtlpTracesEndpoint']}`",
-              f"- Effective OTLP metrics endpoint: `{binding_details['effectiveOtlpMetricsEndpoint']}`",
-              f"- Lambda exec wrapper: `{binding_details['lambdaExecWrapper']}`",
-              f"- ADOT Lambda layer ARN: `{binding_details['adotLambdaLayerArn']}`",
-              f"- Attached layer count: `{binding_details['layerCount']}`",
-              f"- Managed policy count: `{binding_details['managedPolicyCount']}`",
-              "",
-              "## Platform Endpoints",
-              "",
-              f"- Managed suite Grafana URL: `{manifest['managedSuite']['grafanaUrl']}`",
-              f"- Managed suite OTLP HTTP endpoint: `{manifest['managedSuite']['otlpHttpEndpoint']}`",
-              "",
-              "## Metric Coverage",
-              "",
-              f"- Metric support policy: `{metric_coverage['supportPolicy']}`",
-              f"- Dashboard preset: `{metric_coverage['dashboardPreset']}`",
-          ]
-
-          summary_lines.extend([f"- Requested metric: `{name}`" for name in metric_coverage["requestedMetricNames"]])
-          if not metric_coverage["requestedMetricNames"]:
-              summary_lines.append("- Requested metric: `none`")
-          summary_lines.extend([f"- Supported preset metric: `{name}`" for name in metric_coverage["supportedMetricNames"]])
-          if not metric_coverage["supportedMetricNames"]:
-              summary_lines.append("- Supported preset metric: `none`")
-          summary_lines.extend([f"- Recommended runtime metric: `{name}`" for name in metric_coverage["recommendedRuntimeMetrics"]])
-          if not metric_coverage["recommendedRuntimeMetrics"]:
-              summary_lines.append("- Recommended runtime metric: `none`")
-
-          summary_lines.extend([
-              "",
-              "## Delivered Files",
-              "",
-          ])
-          summary_lines.extend([f"- `{name}`" for name in artifact_files])
-          summary_lines.extend([
-              "",
-              "## Required Follow-Up Inputs",
-              "",
-          ])
-
-          if binding_details["requiredInputs"]:
-              for item in binding_details["requiredInputs"]:
-                  summary_lines.append(f"- `{item['name']}`: {item['description']}")
-          else:
-              summary_lines.append("- `none`")
-
-          summary_lines.extend([
-              "",
-              "## Implementation Notes",
-              "",
-          ])
-          if binding_details["notes"]:
-              for note in binding_details["notes"]:
-                  summary_lines.append(f"- {note}")
-          else:
-              summary_lines.append("- No additional adapter notes were emitted.")
-
-          summary_lines.extend([
-              "",
-              "## Client Next Steps",
-              "",
-              "1. Review `validation.txt` to confirm the contract passed platform validation.",
-              "2. Review `plan.json` to understand the neutral platform plan.",
-              "3. If present, consume `bindings.json` in the deployment step that injects runtime configuration into the workload.",
-              "4. Use `implementation-manifest.json` as the exact record of the effective observability implementation and final produced artifacts.",
-          ])
-
-          (handoff_dir / "implementation-summary.md").write_text("\n".join(summary_lines) + "\n")
-          (handoff_dir / "implementation-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-          PY
-
-          cp "$GITHUB_WORKSPACE/generated/validation.txt" "$GITHUB_WORKSPACE/generated/client-handoff/validation.txt"
-          cp "$GITHUB_WORKSPACE/generated/plan.json" "$GITHUB_WORKSPACE/generated/client-handoff/plan.json"
-          if [ -f "$GITHUB_WORKSPACE/generated/bindings.json" ]; then
-            cp "$GITHUB_WORKSPACE/generated/bindings.json" "$GITHUB_WORKSPACE/generated/client-handoff/bindings.json"
-          fi
-
-      - name: Workflow summary
-        if: ${{ always() }}
-        run: |
-          {
-            echo "## Contract Consumer Result"
-            echo
-            echo "- contract path: \`${{ inputs.contract_path }}\`"
-            echo "- generate bindings: \`${{ inputs.generate_bindings }}\`"
-            echo "- bindings target: \`${{ inputs.bindings_target }}\`"
-            echo "- managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`"
-            echo "- effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`"
-            echo "- effective collector source: \`${{ steps.resolve-collector.outputs.effective_collector_source }}\`"
-            echo "- artifact upload enabled: \`${{ inputs.upload_artifacts }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Default bindings output
-        id: bindings-default
-        if: ${{ !inputs.generate_bindings }}
-        run: echo "bindings_json=" >> "$GITHUB_OUTPUT"
-
-      - name: Upload generated artifacts
-        if: ${{ inputs.upload_artifacts }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: o11y-contract-results
-          path: generated/
-
-      - name: Upload client handoff artifact
-        if: ${{ inputs.upload_artifacts }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: o11y-client-handoff
-          path: generated/client-handoff/
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+          OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD != '' && secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || vars.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD || '' }}

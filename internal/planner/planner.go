@@ -365,16 +365,10 @@ func artifactPlans(contract *v1alpha1.ObservabilityContract) []ArtifactPlan {
 
 	if contract.Spec.Capabilities.Dashboards != nil && contract.Spec.Capabilities.Dashboards.Enabled && contract.Spec.Delivery.Target == "aws" {
 		artifacts = append(artifacts, ArtifactPlan{
-			Name:    "cloudwatch-dashboard-template",
-			Layer:   "assets",
-			Path:    "assets/dashboards/cloudwatch/aws-lambda-api-workload.json.tftpl",
-			Purpose: "Reusable CloudWatch dashboard template for API Gateway and Lambda runtime metrics.",
-		})
-		artifacts = append(artifacts, ArtifactPlan{
 			Name:    "managed-suite-assets",
 			Layer:   "assets",
 			Path:    "assets/collector/managed-suite",
-			Purpose: "Platform-managed observability suite assets for collector-managed OTLP endpoints and Grafana.",
+			Purpose: "Platform-managed observability suite assets for collector-managed OTLP endpoints and workload dashboards.",
 		})
 	}
 

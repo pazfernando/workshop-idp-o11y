@@ -125,6 +125,15 @@ outputs:
   managed_suite_otlp_http_endpoint:
     description: Alloy OTLP HTTP endpoint when the managed suite was available.
     value: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
+  workload_dashboard_backend:
+    description: Backend that materialized the workload dashboard.
+    value: ${{ steps.workload-dashboard.outputs.workload_dashboard_backend }}
+  workload_dashboard_uid:
+    description: Workload dashboard UID when the platform materialized one.
+    value: ${{ steps.workload-dashboard.outputs.workload_dashboard_uid }}
+  workload_dashboard_url:
+    description: Workload dashboard URL when the platform materialized one.
+    value: ${{ steps.workload-dashboard.outputs.workload_dashboard_url }}
   effective_collector_endpoint:
     description: Effective collector endpoint used for bindings generation.
     value: ${{ steps.resolve-collector.outputs.effective_collector_endpoint }}
@@ -299,6 +308,56 @@ runs:
           echo "ingestion_mode=$INGESTION_MODE"
           echo "needs_managed_suite=$NEEDS_MANAGED_SUITE"
         } >> "$GITHUB_OUTPUT"
+
+    - name: Resolve workload dashboard context
+      id: dashboard-context
+      shell: bash
+      env:
+        PLAN_JSON: ${{ steps.plan.outputs.plan_json }}
+      run: |
+        set -euo pipefail
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import hashlib
+        import json
+        import os
+        import re
+
+        plan = json.loads(os.environ["PLAN_JSON"])
+        capabilities = plan.get("capabilities", [])
+        dashboards = next((c for c in capabilities if c.get("name") == "dashboards"), None)
+        resource_attributes = plan.get("bindings", {}).get("resourceAttributes", {})
+
+        def slugify(value: str) -> str:
+            value = re.sub(r"[^a-z0-9-]+", "-", value.lower())
+            value = re.sub(r"-+", "-", value).strip("-")
+            return value or "workload"
+
+        system = plan.get("contractRef", {}).get("system", "")
+        name = plan.get("contractRef", {}).get("name", "")
+        environment = plan.get("contractRef", {}).get("environment", "")
+        preset = ""
+        dashboards_enabled = "false"
+        if dashboards:
+            dashboards_enabled = "true"
+            preset = str(dashboards.get("properties", {}).get("preset", "")).strip()
+
+        base_uid = slugify("-".join(part for part in [system, name, environment or "default", preset or "dashboard"] if part))
+        dashboard_uid = f"{base_uid}-grafana"
+        if len(dashboard_uid) > 40:
+            digest = hashlib.sha256(dashboard_uid.encode("utf-8")).hexdigest()[:8]
+            dashboard_uid = f"{dashboard_uid[:31]}-{digest}".rstrip("-")
+
+        title_parts = [part for part in [system, name, environment] if part]
+        dashboard_title = " ".join(title_parts) + " Observability"
+
+        print(f"dashboards_enabled={dashboards_enabled}")
+        print(f"dashboard_preset={preset}")
+        print(f"dashboard_uid={dashboard_uid}")
+        print(f"dashboard_title={dashboard_title}")
+        print(f"service_name={resource_attributes.get('service.name', '')}")
+        print(f"service_namespace={resource_attributes.get('service.namespace', '')}")
+        print(f"deployment_environment={resource_attributes.get('deployment.environment', '')}")
+        PY
 
     - name: Setup Terraform
       if: ${{ steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
@@ -475,6 +534,134 @@ runs:
           } >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Resolve Grafana admin password
+      id: grafana-auth
+      if: ${{ steps.dashboard-context.outputs.dashboards_enabled == 'true' && steps.managed-suite-results.outputs.managed_suite_enabled == 'true' }}
+      shell: bash
+      env:
+        GRAFANA_ADMIN_PASSWORD_INPUT: ${{ steps.context.outputs.grafana_admin_password }}
+      run: |
+        set -euo pipefail
+        GRAFANA_ADMIN_PASSWORD_VALUE="$GRAFANA_ADMIN_PASSWORD_INPUT"
+        if [ -z "$GRAFANA_ADMIN_PASSWORD_VALUE" ] && [ "${{ steps.ensure-state-bucket.outputs.reuse_strategy }}" != "aws_discovery" ]; then
+          GRAFANA_ADMIN_PASSWORD_VALUE="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw grafana_admin_password)"
+        fi
+
+        if [ -z "$GRAFANA_ADMIN_PASSWORD_VALUE" ]; then
+          echo "Grafana admin password could not be resolved for dashboard publication." >&2
+          exit 1
+        fi
+
+        echo "::add-mask::$GRAFANA_ADMIN_PASSWORD_VALUE"
+        echo "password=$GRAFANA_ADMIN_PASSWORD_VALUE" >> "$GITHUB_OUTPUT"
+
+    - name: Wait for Grafana readiness
+      if: ${{ steps.dashboard-context.outputs.dashboards_enabled == 'true' && steps.managed-suite-results.outputs.managed_suite_enabled == 'true' }}
+      shell: bash
+      env:
+        GRAFANA_URL: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
+      run: |
+        set -euo pipefail
+        for attempt in $(seq 1 30); do
+          if curl --silent --show-error --fail --max-time 10 "${GRAFANA_URL}/api/health" >/dev/null; then
+            exit 0
+          fi
+
+          echo "Grafana not ready yet (attempt ${attempt}/30); waiting 10s."
+          sleep 10
+        done
+
+        echo "Grafana did not become ready at ${GRAFANA_URL} within 5 minutes." >&2
+        exit 1
+
+    - name: Publish workload dashboard
+      id: workload-dashboard
+      shell: bash
+      env:
+        DASHBOARDS_ENABLED: ${{ steps.dashboard-context.outputs.dashboards_enabled }}
+        GRAFANA_URL: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
+        GRAFANA_ADMIN_PASSWORD: ${{ steps.grafana-auth.outputs.password }}
+        DASHBOARD_UID: ${{ steps.dashboard-context.outputs.dashboard_uid }}
+        DASHBOARD_TITLE: ${{ steps.dashboard-context.outputs.dashboard_title }}
+        DASHBOARD_PRESET: ${{ steps.dashboard-context.outputs.dashboard_preset }}
+        SERVICE_NAME: ${{ steps.dashboard-context.outputs.service_name }}
+        SERVICE_NAMESPACE: ${{ steps.dashboard-context.outputs.service_namespace }}
+        DEPLOYMENT_ENVIRONMENT: ${{ steps.dashboard-context.outputs.deployment_environment }}
+        TEMPLATE_PATH: ${{ steps.context.outputs.platform_repo_path }}/infra/observability-suite/grafana-dashboard.json.tftpl
+        DASHBOARD_PAYLOAD_PATH: ${{ github.workspace }}/generated/workload-grafana-dashboard-request.json
+      run: |
+        set -euo pipefail
+
+        if [ "$DASHBOARDS_ENABLED" != "true" ] || [ -z "$GRAFANA_URL" ]; then
+          {
+            echo "workload_dashboard_backend=none"
+            echo "workload_dashboard_uid="
+            echo "workload_dashboard_url="
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        python3 - <<'PY'
+        import json
+        import os
+        import re
+        from pathlib import Path
+
+        template = Path(os.environ["TEMPLATE_PATH"]).read_text()
+        rendered = template.replace("${dashboard_uid}", os.environ["DASHBOARD_UID"])
+        rendered = rendered.replace("${dashboard_title}", os.environ["DASHBOARD_TITLE"])
+        dashboard = json.loads(rendered)
+
+        tags = dashboard.setdefault("tags", [])
+        for tag in ["idp-managed", os.environ["DASHBOARD_PRESET"], os.environ["SERVICE_NAME"], os.environ["SERVICE_NAMESPACE"]]:
+            if tag and tag not in tags:
+                tags.append(tag)
+
+        label_map = {
+            "service_name": os.environ["SERVICE_NAME"],
+            "service_namespace": os.environ["SERVICE_NAMESPACE"],
+            "deployment_environment": os.environ["DEPLOYMENT_ENVIRONMENT"],
+        }
+        label_parts = [f'{key}="{value}"' for key, value in label_map.items() if value]
+        label_filter = ""
+        if label_parts:
+            label_filter = "," + ",".join(label_parts)
+
+        selector_pattern = re.compile(r'\{__name__=~"([^"]+)"\}')
+
+        def patch_expr(expr: str) -> str:
+            if not label_filter or "service_name=" in expr:
+                return expr
+            return selector_pattern.sub(lambda m: '{__name__=~"' + m.group(1) + '"' + label_filter + '}', expr)
+
+        for panel in dashboard.get("panels", []):
+            for target in panel.get("targets", []):
+                expr = target.get("expr")
+                if isinstance(expr, str):
+                    target["expr"] = patch_expr(expr)
+
+        payload = {
+            "dashboard": dashboard,
+            "folderId": 0,
+            "overwrite": True,
+        }
+
+        Path(os.environ["DASHBOARD_PAYLOAD_PATH"]).write_text(json.dumps(payload))
+        PY
+
+        curl --fail --silent --show-error \
+          --user "admin:${GRAFANA_ADMIN_PASSWORD}" \
+          --header "Content-Type: application/json" \
+          --request POST \
+          --data @"${DASHBOARD_PAYLOAD_PATH}" \
+          "${GRAFANA_URL}/api/dashboards/db" >/dev/null
+
+        {
+          echo "workload_dashboard_backend=grafana"
+          echo "workload_dashboard_uid=${DASHBOARD_UID}"
+          echo "workload_dashboard_url=${GRAFANA_URL}/d/${DASHBOARD_UID}/${DASHBOARD_UID}"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Resolve collector endpoint
       id: resolve-collector
       shell: bash
@@ -558,6 +745,9 @@ runs:
         BINDINGS_TARGET_INPUT: ${{ inputs.bindings_target }}
         GENERATE_BINDINGS_INPUT: ${{ inputs.generate_bindings }}
         MANAGED_SUITE_ENABLED: ${{ steps.managed-suite-results.outputs.managed_suite_enabled }}
+        WORKLOAD_DASHBOARD_BACKEND: ${{ steps.workload-dashboard.outputs.workload_dashboard_backend }}
+        WORKLOAD_DASHBOARD_UID: ${{ steps.workload-dashboard.outputs.workload_dashboard_uid }}
+        WORKLOAD_DASHBOARD_URL: ${{ steps.workload-dashboard.outputs.workload_dashboard_url }}
         AWS_REGION_INPUT: ${{ inputs.aws_region }}
         EFFECTIVE_COLLECTOR_ENDPOINT: ${{ steps.resolve-collector.outputs.effective_collector_endpoint }}
         EFFECTIVE_COLLECTOR_SOURCE: ${{ steps.resolve-collector.outputs.effective_collector_source }}
@@ -678,6 +868,11 @@ runs:
             "bindingsPresent": bindings_present,
             "managedSuiteEnabled": os.environ["MANAGED_SUITE_ENABLED"] == "true",
             "awsRegion": os.environ["AWS_REGION_INPUT"],
+            "workloadDashboard": {
+                "backend": os.environ["WORKLOAD_DASHBOARD_BACKEND"],
+                "uid": os.environ["WORKLOAD_DASHBOARD_UID"],
+                "url": os.environ["WORKLOAD_DASHBOARD_URL"],
+            },
             "effectiveCollector": {
                 "endpoint": os.environ["EFFECTIVE_COLLECTOR_ENDPOINT"],
                 "source": os.environ["EFFECTIVE_COLLECTOR_SOURCE"],
@@ -728,6 +923,9 @@ runs:
             "",
             f"- Managed suite Grafana URL: `{manifest['managedSuite']['grafanaUrl']}`",
             f"- Managed suite OTLP HTTP endpoint: `{manifest['managedSuite']['otlpHttpEndpoint']}`",
+            f"- Workload dashboard backend: `{manifest['workloadDashboard']['backend']}`",
+            f"- Workload dashboard UID: `{manifest['workloadDashboard']['uid']}`",
+            f"- Workload dashboard URL: `{manifest['workloadDashboard']['url']}`",
             "",
             "## Metric Coverage",
             "",
@@ -805,6 +1003,8 @@ runs:
           echo "- generate bindings: \`${{ inputs.generate_bindings }}\`"
           echo "- bindings target: \`${{ inputs.bindings_target }}\`"
           echo "- managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`"
+          echo "- workload dashboard backend: \`${{ steps.workload-dashboard.outputs.workload_dashboard_backend }}\`"
+          echo "- workload dashboard url: \`${{ steps.workload-dashboard.outputs.workload_dashboard_url }}\`"
           echo "- effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`"
           echo "- effective collector source: \`${{ steps.resolve-collector.outputs.effective_collector_source }}\`"
           echo "- artifact upload enabled: \`${{ inputs.upload_artifacts }}\`"

@@ -71,7 +71,6 @@ jobs:
       bindings_target: aws-lambda
       deploy_managed_suite: true
       aws_region: us-east-1
-      managed_suite_name: team-a-o11y
       managed_suite_grafana_allowed_cidrs: '["10.0.0.0/8"]'
       managed_suite_otlp_allowed_cidrs: '["10.0.0.0/8"]'
     secrets: inherit
@@ -97,6 +96,9 @@ Workflow outputs:
 - `managed_suite_enabled`
 - `managed_suite_grafana_url`
 - `managed_suite_otlp_http_endpoint`
+- `workload_dashboard_backend`
+- `workload_dashboard_uid`
+- `workload_dashboard_url`
 - `effective_collector_endpoint`
 - `effective_collector_source`
 
@@ -153,7 +155,7 @@ The reusable workflow now enforces a few caller-facing rules before doing any ex
 - `bindings_target` must be `aws-lambda` when bindings are enabled
 - `instrumentation_mode` must be `code` or `adot_layer`
 - managed-suite CIDR inputs must be valid JSON arrays
-- `managed_suite_name` must be non-empty when managed-suite deployment is enabled
+- `managed_suite_name` is optional; when omitted, the platform default suite identity is used
 
 ## AWS Lambda Binding Defaults And Notes
 
