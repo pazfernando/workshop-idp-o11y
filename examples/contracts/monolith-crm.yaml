@@ -51,7 +51,7 @@ spec:
           - name: ApplicationOperationDuration
             type: histogram
             unit: ms
-            description: End-to-end application operation latency.
+            description: End-to-end application operation latency, emitted as a histogram so dashboards can derive p95 and p99.
             dimensions: [operation]
           - name: ApplicationOperationErrors
             type: counter

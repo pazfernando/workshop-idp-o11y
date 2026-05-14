@@ -54,7 +54,7 @@ spec:
           - name: HttpServerRequestDuration
             type: histogram
             unit: ms
-            description: End-to-end HTTP request latency for the serverless API.
+            description: End-to-end HTTP request latency for the serverless API, emitted as a histogram so dashboards can derive p95 and p99.
             dimensions: [http.route, http.request.method, http.response.status_code]
           - name: HttpServerRequestErrors
             type: counter

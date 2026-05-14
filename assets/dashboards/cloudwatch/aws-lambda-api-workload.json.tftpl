@@ -30,8 +30,10 @@
         "stacked": false,
         "region": "${aws_region}",
         "metrics": [
-          ["AWS/ApiGateway", "Latency", "ApiId", "${api_id}", "Stage", "${api_stage}", { "stat": "Average", "label": "LatencyMs" }],
-          [".", "IntegrationLatency", ".", ".", ".", ".", { "stat": "Average", "label": "IntegrationLatencyMs" }]
+          ["AWS/ApiGateway", "Latency", "ApiId", "${api_id}", "Stage", "${api_stage}", { "stat": "Average", "label": "LatencyAvgMs" }],
+          [".", "Latency", ".", ".", ".", ".", { "stat": "p99", "label": "LatencyP99Ms" }],
+          [".", "IntegrationLatency", ".", ".", ".", ".", { "stat": "Average", "label": "IntegrationLatencyAvgMs" }],
+          [".", "IntegrationLatency", ".", ".", ".", ".", { "stat": "p99", "label": "IntegrationLatencyP99Ms" }]
         ]
       }
     },
@@ -60,7 +62,8 @@
         "view": "timeSeries",
         "stacked": false,
         "region": "${aws_region}",
-        "metrics": ${lambda_duration_metrics_json}
+        "metrics": ${lambda_duration_metrics_json},
+        "stat": "p99"
       }
     },
     {

@@ -49,6 +49,11 @@
         },
         {
           "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
           "expr": "histogram_quantile(0.99, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__rate_interval]))) or vector(0)",
           "legendFormat": "p99"
         }
@@ -135,8 +140,34 @@
     {
       "id": 7,
       "type": "stat",
+      "title": "p95 Latency",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (increase({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__range]))) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "decimals": 2 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
       "title": "p99 Latency",
-      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {

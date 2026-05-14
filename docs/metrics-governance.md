@@ -48,14 +48,16 @@ These files define:
 - `contractMetrics`: the standard workload metrics accepted in the contract for that preset
 - `recommendedRuntimeMetrics`: the target or platform metrics that should also be observed for that workload shape
 
+Latency contract metrics with names such as `*Duration` are expected to be emitted as histograms. That lets the platform derive percentile views such as `p95` and `p99` where the target backend supports them.
+
 ## Why Runtime Metrics Vary By Preset
 
 The catalog intentionally separates workload metrics from runtime metrics.
 
-- `serverless-api` focuses on request throughput, latency, and errors in the contract, while recommending AWS Lambda runtime metrics such as invocations, duration, throttles, and concurrency
-- `kubernetes-http-service` keeps contract metrics centered on request throughput, latency, and errors, while recommending CPU, memory, and pressure metrics at pod or container level
-- `distributed-service` extends the contract metric set to include outbound dependency call metrics because dependency behavior is usually part of the service reliability surface
-- `monolith-business-app` keeps contract metrics centered on application operations while recommending process-level CPU, memory, and thread metrics for runtime health
+- `serverless-api` focuses on request throughput, latency, and errors in the contract, while recommending AWS Lambda runtime metrics such as invocations, duration, throttles, and concurrency; dashboards should prefer percentile latency views such as `p99` for API and function duration where available
+- `kubernetes-http-service` keeps contract metrics centered on request throughput, latency, and errors, while recommending CPU, memory, and pressure metrics at pod or container level; request latency histograms are intended to back percentile views such as `p95` and `p99`
+- `distributed-service` extends the contract metric set to include outbound dependency call metrics because dependency behavior is usually part of the service reliability surface; both inbound and outbound duration histograms are good candidates for `p95` and `p99`
+- `monolith-business-app` keeps contract metrics centered on application operations while recommending process-level CPU, memory, and thread metrics for runtime health; operation duration histograms can also support `p95` and `p99` when the backend exposes histogram quantiles
 
 This is deliberate:
 
@@ -96,6 +98,7 @@ Today it means:
 - the selected dashboard preset determines the allowed metric set
 - any metric outside that preset is rejected
 - runtime or platform-native metrics such as Lambda concurrency or Kubernetes CPU and memory remain adapter concerns, not contract metrics
+- latency percentiles such as `p95` or `p99` are derived views over supported histogram metrics, not separate contract metric names
 
 ## Plan, Bindings, And Handoff
 

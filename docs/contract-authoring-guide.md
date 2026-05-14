@@ -191,6 +191,7 @@ Recommended practice:
 - avoid uncontrolled high-cardinality dimensions
 - use the canonical preset metric names published in `catalog/metrics/presets/`
 - treat runtime metrics such as CPU, memory, concurrency, throttling, or pressure as adapter or platform metrics unless the preset explicitly exposes them as contract metrics
+- define latency metrics as histograms so dashboards and SLO tooling can derive percentiles such as `p95` and `p99` without inventing separate contract metric names
 
 ### `spec.capabilities`
 
