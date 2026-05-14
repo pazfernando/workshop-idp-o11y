@@ -1,13 +1,8 @@
 name: Publish Caller Dashboard
-run-name: ${{ format('Publish Caller Dashboard ({0} / {1})', inputs.caller_identifier, inputs.dispatch_id) }}
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      dispatch_id:
-        description: Unique dispatch correlation id from the caller workflow
-        required: true
-        type: string
       managed_suite_name:
         description: Base name used for managed-suite resources
         required: false
