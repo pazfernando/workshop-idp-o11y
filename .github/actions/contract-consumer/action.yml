@@ -258,6 +258,7 @@ runs:
         aws-region: ${{ steps.context.outputs.aws_region }}
 
     - name: Ensure Terraform state bucket
+      id: ensure-state-bucket
       if: ${{ inputs.deploy_managed_suite == 'true' }}
       shell: bash
       env:
@@ -290,6 +291,11 @@ runs:
           aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
         fi
 
+        {
+          echo "bucket_name=$BUCKET_NAME"
+          echo "state_key=${{ steps.context.outputs.tf_state_key }}"
+        } >> "$GITHUB_OUTPUT"
+
         echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
 
     - name: Initialize managed-suite Terraform
@@ -297,7 +303,8 @@ runs:
       shell: bash
       env:
         AWS_REGION: ${{ steps.context.outputs.aws_region }}
-        TF_STATE_KEY: ${{ steps.context.outputs.tf_state_key }}
+        TF_STATE_BUCKET: ${{ steps.ensure-state-bucket.outputs.bucket_name }}
+        TF_STATE_KEY: ${{ steps.ensure-state-bucket.outputs.state_key }}
       run: |
         set -euo pipefail
         terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" init -reconfigure \
