@@ -105,22 +105,6 @@ inputs:
     description: JSON array of CIDR ranges allowed to access SSH.
     required: false
     default: "[]"
-  caller_identifier:
-    description: Stable identifier for the caller deployment, used to scope per-caller assets.
-    required: false
-    default: ""
-  caller_dashboard_uid:
-    description: Grafana dashboard UID for the caller-specific dashboard.
-    required: false
-    default: ""
-  caller_dashboard_title:
-    description: Grafana dashboard title for the caller-specific dashboard.
-    required: false
-    default: ""
-  publish_caller_grafana_dashboard:
-    description: Publish or update a caller-specific Grafana dashboard in the reused managed suite.
-    required: false
-    default: "true"
 
 outputs:
   validation_message:
@@ -147,9 +131,6 @@ outputs:
   effective_collector_source:
     description: Source of the effective collector endpoint.
     value: ${{ steps.resolve-collector.outputs.effective_collector_source }}
-  caller_grafana_dashboard_url:
-    description: Caller-specific Grafana dashboard URL when publication is enabled.
-    value: ${{ steps.publish-caller-grafana-dashboard.outputs.dashboard_url }}
 
 runs:
   using: composite
@@ -202,10 +183,6 @@ runs:
         OTLP_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
         SSH_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
         COLLECTOR_ENDPOINT_INPUT: ${{ inputs.collector_endpoint }}
-        CALLER_IDENTIFIER_INPUT: ${{ inputs.caller_identifier }}
-        CALLER_DASHBOARD_UID_INPUT: ${{ inputs.caller_dashboard_uid }}
-        CALLER_DASHBOARD_TITLE_INPUT: ${{ inputs.caller_dashboard_title }}
-        PUBLISH_CALLER_GRAFANA_DASHBOARD: ${{ inputs.publish_caller_grafana_dashboard }}
       run: |
         set -euo pipefail
 
@@ -240,13 +217,6 @@ runs:
         python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$GRAFANA_ALLOWED_CIDRS_INPUT"
         python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$OTLP_ALLOWED_CIDRS_INPUT"
         python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$SSH_ALLOWED_CIDRS_INPUT"
-
-        if [ "$PUBLISH_CALLER_GRAFANA_DASHBOARD" = "true" ]; then
-          if [ -z "$CALLER_IDENTIFIER_INPUT" ] || [ -z "$CALLER_DASHBOARD_UID_INPUT" ] || [ -z "$CALLER_DASHBOARD_TITLE_INPUT" ]; then
-            echo "caller_identifier, caller_dashboard_uid, and caller_dashboard_title are required when publish_caller_grafana_dashboard=true." >&2
-            exit 1
-          fi
-        fi
 
         if { [ "$DEPLOY_MANAGED_SUITE" = "true" ] || [ "$REUSE_MANAGED_SUITE" = "true" ]; } && [ -n "$COLLECTOR_ENDPOINT_INPUT" ]; then
           echo "Explicit collector_endpoint provided. It will take precedence over the managed-suite OTLP endpoint."
@@ -396,72 +366,6 @@ runs:
           } >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Publish caller Grafana dashboard
-      id: publish-caller-grafana-dashboard
-      if: ${{ steps.managed-suite-results.outputs.managed_suite_enabled == 'true' && inputs.publish_caller_grafana_dashboard == 'true' }}
-      shell: bash
-      env:
-        GRAFANA_URL: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
-        CALLER_IDENTIFIER: ${{ inputs.caller_identifier }}
-        CALLER_DASHBOARD_UID: ${{ inputs.caller_dashboard_uid }}
-        CALLER_DASHBOARD_TITLE: ${{ inputs.caller_dashboard_title }}
-        PLATFORM_REPO_PATH: ${{ steps.context.outputs.platform_repo_path }}
-      run: |
-        set -euo pipefail
-        DASHBOARD_TEMPLATE_PATH="${PLATFORM_REPO_PATH}/infra/observability-suite/grafana-dashboard.json.tftpl"
-        DASHBOARD_PAYLOAD_PATH="${GITHUB_WORKSPACE}/generated/caller-grafana-dashboard-request.json"
-        mkdir -p "${GITHUB_WORKSPACE}/generated"
-        GRAFANA_ADMIN_PASSWORD="$(terraform -chdir="${PLATFORM_REPO_PATH}/infra/terraform/managed-suite" output -raw grafana_admin_password)"
-        export DASHBOARD_TEMPLATE_PATH DASHBOARD_PAYLOAD_PATH
-
-        python3 <<'PY'
-        import json
-        import os
-        import re
-        from pathlib import Path
-
-        template = Path(os.environ["DASHBOARD_TEMPLATE_PATH"]).read_text()
-        rendered = template.replace("${dashboard_uid}", os.environ["CALLER_DASHBOARD_UID"])
-        rendered = rendered.replace("${dashboard_title}", os.environ["CALLER_DASHBOARD_TITLE"])
-        dashboard = json.loads(rendered)
-
-        tags = dashboard.setdefault("tags", [])
-        for tag in ["caller", os.environ["CALLER_IDENTIFIER"]]:
-          if tag not in tags:
-            tags.append(tag)
-
-        label_filter = f',service_instance_id="{os.environ["CALLER_IDENTIFIER"]}"'
-        selector_pattern = re.compile(r'\{__name__=~"([^"]+)"\}')
-
-        def patch_expr(expr: str) -> str:
-          if "service_instance_id=" in expr:
-            return expr
-          return selector_pattern.sub(lambda m: '{__name__=~"' + m.group(1) + '"' + label_filter + '}', expr)
-
-        for panel in dashboard.get("panels", []):
-          for target in panel.get("targets", []):
-            expr = target.get("expr")
-            if isinstance(expr, str):
-              target["expr"] = patch_expr(expr)
-
-        payload = {
-          "dashboard": dashboard,
-          "folderId": 0,
-          "overwrite": True,
-        }
-
-        Path(os.environ["DASHBOARD_PAYLOAD_PATH"]).write_text(json.dumps(payload))
-        PY
-
-        curl --fail --silent --show-error \
-          --user "admin:${GRAFANA_ADMIN_PASSWORD}" \
-          --header "Content-Type: application/json" \
-          --request POST \
-          --data @"${DASHBOARD_PAYLOAD_PATH}" \
-          "${GRAFANA_URL}/api/dashboards/db" >/dev/null
-
-        echo "dashboard_url=${GRAFANA_URL}/d/${CALLER_DASHBOARD_UID}" >> "$GITHUB_OUTPUT"
-
     - name: Resolve collector endpoint
       id: resolve-collector
       shell: bash
@@ -572,7 +476,6 @@ runs:
         EFFECTIVE_COLLECTOR_SOURCE: ${{ steps.resolve-collector.outputs.effective_collector_source }}
         MANAGED_SUITE_GRAFANA_URL: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
         MANAGED_SUITE_OTLP_HTTP_ENDPOINT: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
-        CALLER_GRAFANA_DASHBOARD_URL: ${{ steps.publish-caller-grafana-dashboard.outputs.dashboard_url }}
         INSTRUMENTATION_MODE_INPUT: ${{ inputs.instrumentation_mode }}
         ADOT_LAMBDA_LAYER_ARN_INPUT: ${{ inputs.adot_lambda_layer_arn }}
         DIRECT_ENDPOINT_INPUT: ${{ inputs.direct_endpoint }}
@@ -695,7 +598,6 @@ runs:
             "managedSuite": {
                 "grafanaUrl": os.environ["MANAGED_SUITE_GRAFANA_URL"],
                 "otlpHttpEndpoint": os.environ["MANAGED_SUITE_OTLP_HTTP_ENDPOINT"],
-                "callerGrafanaDashboardUrl": os.environ["CALLER_GRAFANA_DASHBOARD_URL"],
             },
             "bindingImplementation": binding_details,
             "requestedInputEndpoints": {
@@ -739,7 +641,6 @@ runs:
             "",
             f"- Managed suite Grafana URL: `{manifest['managedSuite']['grafanaUrl']}`",
             f"- Managed suite OTLP HTTP endpoint: `{manifest['managedSuite']['otlpHttpEndpoint']}`",
-            f"- Caller Grafana dashboard URL: `{manifest['managedSuite']['callerGrafanaDashboardUrl']}`",
             "",
             "## Metric Coverage",
             "",
@@ -817,7 +718,6 @@ runs:
           echo "- generate bindings: \`${{ inputs.generate_bindings }}\`"
           echo "- bindings target: \`${{ inputs.bindings_target }}\`"
           echo "- managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`"
-          echo "- caller grafana dashboard url: \`${{ steps.publish-caller-grafana-dashboard.outputs.dashboard_url }}\`"
           echo "- effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`"
           echo "- effective collector source: \`${{ steps.resolve-collector.outputs.effective_collector_source }}\`"
           echo "- artifact upload enabled: \`${{ inputs.upload_artifacts }}\`"

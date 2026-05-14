@@ -1,0 +1,181 @@
+name: Publish Caller Dashboard
+run-name: ${{ format('Publish Caller Dashboard ({0} / {1})', inputs.caller_identifier, inputs.dispatch_id) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      dispatch_id:
+        description: Unique dispatch correlation id from the caller workflow
+        required: true
+        type: string
+      managed_suite_name:
+        description: Base name used for managed-suite resources
+        required: false
+        default: o11y-platform
+        type: string
+      aws_region:
+        description: AWS region where the shared suite runs
+        required: false
+        default: us-east-1
+        type: string
+      caller_identifier:
+        description: Stable identifier for the caller deployment
+        required: true
+        type: string
+      caller_dashboard_uid:
+        description: Grafana dashboard UID for the caller-specific dashboard
+        required: true
+        type: string
+      caller_dashboard_title:
+        description: Grafana dashboard title for the caller-specific dashboard
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      AWS_REGION: ${{ inputs.aws_region }}
+      SUITE_NAME: ${{ inputs.managed_suite_name }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.managed_suite_name) }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD }}
+    steps:
+      - name: Validate required secret
+        run: |
+          set -euo pipefail
+          if [ -z "$GRAFANA_ADMIN_PASSWORD" ]; then
+            echo "OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD must be configured in the host repository secrets." >&2
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Terraform state backend
+        id: backend
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [ -n "$TF_STATE_BUCKET" ]; then
+            BUCKET_NAME="$TF_STATE_BUCKET"
+          else
+            PROJECT_SLUG="$(printf '%s' "$SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+            PROJECT_SLUG="${PROJECT_SLUG#-}"
+            PROJECT_SLUG="${PROJECT_SLUG%-}"
+            BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+            BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
+          fi
+
+          if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Managed-suite Terraform state bucket '$BUCKET_NAME' does not exist or is not accessible." >&2
+            exit 1
+          fi
+
+          {
+            echo "bucket_name=$BUCKET_NAME"
+            echo "state_key=$TF_STATE_KEY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Initialize Terraform
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/terraform/managed-suite init -reconfigure \
+            -backend-config="bucket=${{ steps.backend.outputs.bucket_name }}" \
+            -backend-config="key=${{ steps.backend.outputs.state_key }}" \
+            -backend-config="region=${AWS_REGION}"
+
+      - name: Read managed suite outputs
+        id: suite
+        run: |
+          set -euo pipefail
+          {
+            echo "grafana_url=$(terraform -chdir=infra/terraform/managed-suite output -raw grafana_url)"
+            echo "otlp_http_endpoint=$(terraform -chdir=infra/terraform/managed-suite output -raw otlp_http_endpoint)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish caller Grafana dashboard
+        env:
+          GRAFANA_URL: ${{ steps.suite.outputs.grafana_url }}
+          CALLER_IDENTIFIER: ${{ inputs.caller_identifier }}
+          CALLER_DASHBOARD_UID: ${{ inputs.caller_dashboard_uid }}
+          CALLER_DASHBOARD_TITLE: ${{ inputs.caller_dashboard_title }}
+        run: |
+          set -euo pipefail
+          DASHBOARD_TEMPLATE_PATH="${GITHUB_WORKSPACE}/infra/observability-suite/grafana-dashboard.json.tftpl"
+          DASHBOARD_PAYLOAD_PATH="${GITHUB_WORKSPACE}/caller-grafana-dashboard-request.json"
+          export DASHBOARD_TEMPLATE_PATH DASHBOARD_PAYLOAD_PATH
+
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          template = Path(os.environ["DASHBOARD_TEMPLATE_PATH"]).read_text()
+          rendered = template.replace("${dashboard_uid}", os.environ["CALLER_DASHBOARD_UID"])
+          rendered = rendered.replace("${dashboard_title}", os.environ["CALLER_DASHBOARD_TITLE"])
+          dashboard = json.loads(rendered)
+
+          tags = dashboard.setdefault("tags", [])
+          for tag in ["caller", os.environ["CALLER_IDENTIFIER"]]:
+            if tag not in tags:
+              tags.append(tag)
+
+          label_filter = f',service_instance_id="{os.environ["CALLER_IDENTIFIER"]}"'
+          selector_pattern = re.compile(r'\{__name__=~"([^"]+)"\}')
+
+          def patch_expr(expr: str) -> str:
+            if "service_instance_id=" in expr:
+              return expr
+            return selector_pattern.sub(lambda m: '{__name__=~"' + m.group(1) + '"' + label_filter + '}', expr)
+
+          for panel in dashboard.get("panels", []):
+            for target in panel.get("targets", []):
+              expr = target.get("expr")
+              if isinstance(expr, str):
+                target["expr"] = patch_expr(expr)
+
+          payload = {
+            "dashboard": dashboard,
+            "folderId": 0,
+            "overwrite": True,
+          }
+
+          Path(os.environ["DASHBOARD_PAYLOAD_PATH"]).write_text(json.dumps(payload))
+          PY
+
+          curl --fail --silent --show-error \
+            --user "admin:${GRAFANA_ADMIN_PASSWORD}" \
+            --header "Content-Type: application/json" \
+            --request POST \
+            --data @"${DASHBOARD_PAYLOAD_PATH}" \
+            "${GRAFANA_URL}/api/dashboards/db" >/dev/null
+
+      - name: Workflow summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Caller Dashboard Result"
+            echo
+            echo "- managed suite name: \`${{ inputs.managed_suite_name }}\`"
+            echo "- caller identifier: \`${{ inputs.caller_identifier }}\`"
+            echo "- grafana base url: \`${{ steps.suite.outputs.grafana_url }}\`"
+            echo "- caller dashboard url: \`${{ steps.suite.outputs.grafana_url }}/d/${{ inputs.caller_dashboard_uid }}\`"
+            echo "- otlp http endpoint: \`${{ steps.suite.outputs.otlp_http_endpoint }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
