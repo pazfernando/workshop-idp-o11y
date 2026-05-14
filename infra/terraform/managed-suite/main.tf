@@ -68,6 +68,7 @@ locals {
     deployment_environment   = "platform"
   })
   grafana_dashboard_json = templatefile("${path.module}/../../observability-suite/grafana-dashboard.json.tftpl", {
+    dashboard_uid   = var.dashboard_uid
     dashboard_title = var.dashboard_title
   })
   docker_compose = templatefile("${path.module}/../../observability-suite/docker-compose.yml.tftpl", {
