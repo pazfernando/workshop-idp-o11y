@@ -286,15 +286,7 @@ runs:
         COLLECTOR_ENDPOINT_INPUT: ${{ inputs.collector_endpoint }}
       run: |
         set -euo pipefail
-        INGESTION_MODE="$(
-          python3 - <<'PY'
-import json
-import os
-
-plan = json.loads(os.environ["PLAN_JSON"])
-print(plan.get("bindings", {}).get("ingestionMode", ""))
-PY
-        )"
+        INGESTION_MODE="$(python3 -c 'import json, os; print(json.loads(os.environ["PLAN_JSON"]).get("bindings", {}).get("ingestionMode", ""))')"
 
         NEEDS_MANAGED_SUITE=false
         if [ "$DEPLOY_MANAGED_SUITE" = "true" ]; then
