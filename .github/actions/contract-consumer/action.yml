@@ -58,9 +58,13 @@ inputs:
     required: false
     default: "true"
   deploy_managed_suite:
-    description: Deploy the platform-managed suite before generating bindings.
+    description: Create or update the platform-managed suite before generating bindings.
     required: false
     default: "false"
+  reuse_managed_suite:
+    description: Reuse an existing platform-managed suite by reading its Terraform state outputs.
+    required: false
+    default: "true"
   aws_region:
     description: AWS region used when deploy_managed_suite is enabled.
     required: false
@@ -113,13 +117,13 @@ outputs:
     description: Target-specific bindings JSON when generate_bindings is enabled.
     value: ${{ steps.bindings.outputs.bindings_json }}
   managed_suite_enabled:
-    description: Whether the managed suite was deployed by the action.
+    description: Whether the managed suite was available to the action, either by reuse or by apply.
     value: ${{ steps.managed-suite-results.outputs.managed_suite_enabled }}
   managed_suite_grafana_url:
-    description: Grafana URL when the managed suite was deployed.
+    description: Grafana URL when the managed suite was available.
     value: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
   managed_suite_otlp_http_endpoint:
-    description: Alloy OTLP HTTP endpoint when the managed suite was deployed.
+    description: Alloy OTLP HTTP endpoint when the managed suite was available.
     value: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
   effective_collector_endpoint:
     description: Effective collector endpoint used for bindings generation.
@@ -173,6 +177,7 @@ runs:
         BINDINGS_TARGET: ${{ inputs.bindings_target }}
         INSTRUMENTATION_MODE: ${{ inputs.instrumentation_mode }}
         DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
+        REUSE_MANAGED_SUITE: ${{ inputs.reuse_managed_suite }}
         MANAGED_SUITE_NAME_INPUT: ${{ inputs.managed_suite_name }}
         GRAFANA_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_grafana_allowed_cidrs }}
         OTLP_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_otlp_allowed_cidrs }}
@@ -204,8 +209,8 @@ runs:
           exit 1
         fi
 
-        if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -z "$MANAGED_SUITE_NAME_INPUT" ]; then
-          echo "managed_suite_name is required when deploy_managed_suite=true." >&2
+        if { [ "$DEPLOY_MANAGED_SUITE" = "true" ] || [ "$REUSE_MANAGED_SUITE" = "true" ]; } && [ -z "$MANAGED_SUITE_NAME_INPUT" ]; then
+          echo "managed_suite_name is required when the managed suite path is enabled." >&2
           exit 1
         fi
 
@@ -213,7 +218,7 @@ runs:
         python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$OTLP_ALLOWED_CIDRS_INPUT"
         python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert isinstance(value,list), "must be a JSON array"' "$SSH_ALLOWED_CIDRS_INPUT"
 
-        if [ "$DEPLOY_MANAGED_SUITE" = "true" ] && [ -n "$COLLECTOR_ENDPOINT_INPUT" ]; then
+        if { [ "$DEPLOY_MANAGED_SUITE" = "true" ] || [ "$REUSE_MANAGED_SUITE" = "true" ]; } && [ -n "$COLLECTOR_ENDPOINT_INPUT" ]; then
           echo "Explicit collector_endpoint provided. It will take precedence over the managed-suite OTLP endpoint."
         fi
 
@@ -243,13 +248,13 @@ runs:
         go-version: ${{ steps.go-version.outputs.version }}
 
     - name: Setup Terraform
-      if: ${{ inputs.deploy_managed_suite == 'true' }}
+      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
       uses: hashicorp/setup-terraform@v4
       with:
         terraform_wrapper: false
 
     - name: Configure AWS credentials
-      if: ${{ inputs.deploy_managed_suite == 'true' }}
+      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -257,14 +262,15 @@ runs:
         aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
         aws-region: ${{ steps.context.outputs.aws_region }}
 
-    - name: Ensure Terraform state bucket
+    - name: Resolve managed-suite state backend
       id: ensure-state-bucket
-      if: ${{ inputs.deploy_managed_suite == 'true' }}
+      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
       shell: bash
       env:
         AWS_REGION: ${{ steps.context.outputs.aws_region }}
         MANAGED_SUITE_NAME: ${{ steps.context.outputs.managed_suite_name }}
         TF_STATE_BUCKET: ${{ steps.context.outputs.tf_state_bucket }}
+        DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
       run: |
         set -euo pipefail
         ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
@@ -280,7 +286,7 @@ runs:
 
         if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
           echo "Using existing Terraform state bucket: $BUCKET_NAME"
-        else
+        elif [ "$DEPLOY_MANAGED_SUITE" = "true" ]; then
           if [ "$AWS_REGION" = "us-east-1" ]; then
             aws s3api create-bucket --bucket "$BUCKET_NAME"
           else
@@ -289,6 +295,9 @@ runs:
 
           aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
           aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+        else
+          echo "Managed-suite Terraform state bucket '$BUCKET_NAME' does not exist or is not accessible." >&2
+          exit 1
         fi
 
         {
@@ -299,7 +308,7 @@ runs:
         echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
 
     - name: Initialize managed-suite Terraform
-      if: ${{ inputs.deploy_managed_suite == 'true' }}
+      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
       shell: bash
       env:
         AWS_REGION: ${{ steps.context.outputs.aws_region }}
@@ -341,7 +350,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
+        if [ "${{ inputs.deploy_managed_suite }}" = "true" ] || [ "${{ inputs.reuse_managed_suite }}" = "true" ]; then
           GRAFANA_URL="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw grafana_url)"
           OTLP_HTTP_ENDPOINT="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw otlp_http_endpoint)"
           {
@@ -367,7 +376,7 @@ runs:
         if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
           EFFECTIVE_COLLECTOR_SOURCE="none"
         fi
-        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
+        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ steps.managed-suite-results.outputs.managed_suite_enabled }}" = "true" ]; then
           EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
           EFFECTIVE_COLLECTOR_SOURCE="managed_suite"
         fi
