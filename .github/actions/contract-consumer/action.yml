@@ -145,7 +145,7 @@ runs:
         SSH_ALLOWED_CIDRS_INPUT: ${{ inputs.managed_suite_ssh_allowed_cidrs }}
       run: |
         set -euo pipefail
-        PLATFORM_REPO_PATH="${{ github.action_path }}"
+        PLATFORM_REPO_PATH="$(cd "${{ github.action_path }}/../../.." && pwd)"
         CLIENT_REPO_PATH="$GITHUB_WORKSPACE"
         TF_STATE_KEY_VALUE="$TF_STATE_KEY_INPUT"
         if [ -z "$TF_STATE_KEY_VALUE" ]; then
