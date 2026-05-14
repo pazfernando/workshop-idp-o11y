@@ -1,0 +1,6 @@
+name: serverless-api
+displayName: Serverless API
+description: Governed metric set for AWS Lambda and API-style serverless workloads.
+metrics:
+  - OrdersCreated
+  - CreateOrderLatencyMs

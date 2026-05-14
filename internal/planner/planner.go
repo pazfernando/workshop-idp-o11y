@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	metriccatalog "github.com/example/workshop-iidp-o11y/catalog/metrics"
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
-	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 )
 
 type ProvisioningPlan struct {
@@ -129,7 +129,7 @@ func signalCapabilities(contract *v1alpha1.ObservabilityContract) []CapabilityPl
 		supportedMetrics := []string{}
 		if contract.Spec.Capabilities.Dashboards != nil {
 			dashboardPreset = contract.Spec.Capabilities.Dashboards.Preset
-			if metrics, ok := metricspreset.SupportedMetrics(dashboardPreset); ok {
+			if metrics, ok := metriccatalog.SupportedMetrics(dashboardPreset); ok {
 				supportedMetrics = metrics
 			}
 		}
@@ -292,7 +292,7 @@ func metricNames(metrics []v1alpha1.MetricSpec) []string {
 }
 
 func supportedMetricsForPreset(preset string) []string {
-	metrics, ok := metricspreset.SupportedMetrics(preset)
+	metrics, ok := metriccatalog.SupportedMetrics(preset)
 	if !ok {
 		return nil
 	}

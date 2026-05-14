@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	metriccatalog "github.com/example/workshop-iidp-o11y/catalog/metrics"
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
-	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -162,7 +162,7 @@ func validateMetricsAgainstPreset(contract *v1alpha1.ObservabilityContract) erro
 	}
 
 	preset := strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset)
-	supportedMetrics, _ := metricspreset.SupportedMetrics(preset)
+	supportedMetrics, _ := metriccatalog.SupportedMetrics(preset)
 
 	supported := map[string]struct{}{}
 	for _, metric := range supportedMetrics {
@@ -192,8 +192,8 @@ func validateDashboardPreset(contract *v1alpha1.ObservabilityContract) error {
 	if preset == "" {
 		return fmt.Errorf("capabilities.dashboards.preset is required when dashboards are enabled")
 	}
-	if _, ok := metricspreset.Lookup(preset); !ok {
-		return fmt.Errorf("dashboard preset %q is not supported; supported presets: %s", preset, strings.Join(metricspreset.KnownPresets(), ", "))
+	if _, ok := metriccatalog.Lookup(preset); !ok {
+		return fmt.Errorf("dashboard preset %q is not supported; supported presets: %s", preset, strings.Join(metriccatalog.KnownPresets(), ", "))
 	}
 
 	return nil

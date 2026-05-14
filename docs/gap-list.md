@@ -25,8 +25,8 @@ This document captures the remaining product gaps after the current repository i
 ## 3. Governed Metric Catalog
 
 - Metrics are still modeled as client-authored entries inside `metrics.catalog`.
-- The repository does not yet enforce a platform-owned governed metric catalog with stable metric IDs and adapter coverage metadata.
-- Dashboard presets are not yet explicitly tied to approved metric coverage definitions.
+- The repository now has a visible preset metric catalog and enforces preset-only metric support, but it does not yet expose rich metric metadata, stable catalog IDs, or adapter coverage metadata per metric.
+- The contract does not yet use governed metric references as its primary interface.
 - There is no productized proposal or approval workflow for new metrics.
 
 ## 4. Expanded Target Coverage

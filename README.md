@@ -13,6 +13,7 @@ This repository provides:
 - a backend-neutral planner
 - target adapters
 - reusable catalog classes
+- repository-visible preset metric catalogs
 - reusable platform assets for collectors, dashboards, and alerts
 
 ## Current Product Interface
@@ -59,7 +60,8 @@ go run ./cmd/o11yd -listen :8080
 │   ├── collector
 │   └── dashboards
 ├── catalog
-│   └── classes
+│   ├── classes
+│   └── metrics
 ├── cmd/o11yctl
 ├── cmd/o11yd
 ├── docs

@@ -106,6 +106,7 @@ Current product boundary for metrics:
 
 - the repository currently supports only metrics that belong to a supported dashboard preset
 - free-form client-authored metrics outside those preset catalogs are not supported in the standard product path
+- the current client-visible preset metric catalog lives under `catalog/metrics/presets/`
 
 ## What Application Teams Should Read Next
 

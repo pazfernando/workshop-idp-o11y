@@ -1,0 +1,6 @@
+name: monolith-business-app
+displayName: Monolith Business Application
+description: Governed metric set for monolithic business applications.
+metrics:
+  - CustomerSearchLatency
+  - CustomerSearchErrors

@@ -1,0 +1,6 @@
+name: kubernetes-http-service
+displayName: Kubernetes HTTP Service
+description: Governed metric set for Kubernetes HTTP services.
+metrics:
+  - HttpServerRequests
+  - PaymentAuthorizations

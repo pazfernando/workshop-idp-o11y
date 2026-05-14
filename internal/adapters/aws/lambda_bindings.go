@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	metriccatalog "github.com/example/workshop-iidp-o11y/catalog/metrics"
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
-	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 	"github.com/example/workshop-iidp-o11y/internal/planner"
 )
 
@@ -152,7 +152,7 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 
 	if contract.Spec.Telemetry.Signals.Metrics.Enabled && contract.Spec.Capabilities.Dashboards != nil {
 		preset := strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset)
-		if supportedMetrics, ok := metricspreset.SupportedMetrics(preset); ok {
+		if supportedMetrics, ok := metriccatalog.SupportedMetrics(preset); ok {
 			notes = append(notes, fmt.Sprintf("Current metric support is limited to dashboard preset %q metrics: %s.", preset, strings.Join(supportedMetrics, ", ")))
 		}
 	}

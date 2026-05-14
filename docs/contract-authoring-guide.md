@@ -175,6 +175,7 @@ Current product rule:
 
 - only metrics that belong to the selected supported dashboard preset are accepted today
 - the metrics catalog is not currently a free-form production extension surface
+- the current preset metric catalog is published under `catalog/metrics/presets/`
 
 Each metric should define:
 

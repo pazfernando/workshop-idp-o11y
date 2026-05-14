@@ -31,6 +31,17 @@ In the current repository state, the standard product path is stricter than the 
 - only metrics that belong to supported dashboard presets are accepted
 - free-form client-defined production metrics outside preset coverage are rejected
 - plan outputs, bindings notes, and handoff artifacts report this as a `preset-only` metric support policy
+- the visible source of truth for those preset metric sets lives under `catalog/metrics/presets/`
+
+## Current Catalog Location
+
+The current governed preset metric catalog is stored in repository-visible files:
+
+- `catalog/metrics/presets/serverless-api.yaml`
+- `catalog/metrics/presets/kubernetes-http-service.yaml`
+- `catalog/metrics/presets/monolith-business-app.yaml`
+
+These files are the current client-visible source of truth for which metrics are accepted by each supported preset.
 
 ## Roles And Responsibilities
 
@@ -58,9 +69,11 @@ The platform or observability team should:
 - define adapter support coverage for each approved metric
 - review and approve new metric proposals
 
-## Governed Metric Catalog
+## Governed Metric Catalog Model
 
-Each governed metric should have metadata similar to the following conceptual model:
+The current preset files intentionally stay minimal and expose only the supported metric names for each preset.
+
+The fuller long-term governed metric model should evolve toward metadata similar to the following conceptual structure:
 
 ```yaml
 id: business.order.created.count
@@ -120,7 +133,7 @@ This is what prevents the metric contract from becoming ambiguous across runtime
 
 ## Contract Direction
 
-The current repository still models `spec.telemetry.signals.metrics.catalog` as free-form metric definitions.
+The current repository still models `spec.telemetry.signals.metrics.catalog` as contract-authored metric definitions, even though validation now restricts those entries to the selected preset catalog.
 
 The intended evolution is:
 
@@ -237,22 +250,25 @@ This gives the deployment owner an exact record of what observability coverage w
 
 Suggested sequence:
 
-1. define a platform-owned governed metric catalog artifact in the repository
+1. expand the preset catalog files with richer metric metadata and governance fields
 2. add adapter coverage metadata for the first supported target
 3. introduce `catalogRefs` as a preferred contract path
 4. keep free-form `metrics.catalog` only as a transitional compatibility field
-5. add validation warnings or failures for ungoverned production metric definitions
-6. connect dashboard presets to explicit metric coverage
-7. expose coverage in plan outputs and client handoff artifacts
+5. connect dashboard presets to explicit metric coverage
+6. expose coverage in plan outputs and client handoff artifacts
+7. add productized proposal workflow semantics for future metric expansion
 
 ## Current Repository Status
 
 Today, the repository is only partially at this destination:
 
+- the repository now has a visible preset metric catalog under `catalog/metrics/presets/`
 - the contract already treats the metrics catalog as central intent
 - dashboard presets already exist
+- validation now enforces preset-only metric support
+- plan outputs and handoff artifacts now report preset metric support semantics
 - adapter dashboard materialization is still partial
-- governed metric references are not yet enforced
-- approval workflow is not yet implemented in product interfaces
+- governed metric references are not yet the primary contract path
+- rich metric metadata and approval workflow are not yet implemented in product interfaces
 
 This document describes the intended hardening direction.
