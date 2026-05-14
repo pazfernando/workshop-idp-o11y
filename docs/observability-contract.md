@@ -4,6 +4,8 @@ The `ObservabilityContract` is the application-facing API of this platform produ
 
 Its purpose is to let an application team declare observability intent in a stable, backend-neutral format. The contract describes what the workload needs from the platform, while the platform decides how to implement that intent with the supported adapters, classes, and assets.
 
+The contract is not the whole runtime integration surface. It describes workload intent. Client-specific runtime implementation details such as AWS Lambda instrumentation mode, ADOT layer attachment, EMF compatibility handling, and the final collector endpoint selection are resolved later by the bindings interface and surfaced to the client in the generated handoff artifact.
+
 ## What The Contract Must Express
 
 The contract allows an application team to declare:
@@ -23,6 +25,17 @@ The contract does not require the application team to know whether the platform 
 - Keep implementation-specific values out of the contract whenever possible.
 - Treat the metrics catalog as part of the API contract between the workload and the platform.
 - Reserve `status` for platform-produced outputs and lifecycle reporting.
+
+## What The Contract Does Not Decide
+
+The contract does not currently let the client choose:
+
+- AWS Lambda `instrumentation_mode` such as `code` or `adot_layer`
+- whether EMF compatibility mode stays enabled in AWS Lambda bindings
+- the exact collector endpoint injected into a client runtime
+- ADOT layer ARNs, execution wrappers, or IAM policies
+
+Those decisions belong to the client consumption interface and the target-specific bindings output, not to the contract itself.
 
 ## Structure
 
@@ -63,6 +76,31 @@ Examples:
 2. The planner converts the contract into a neutral `ProvisioningPlan`.
 3. The target adapter resolves supported classes, assets, and runtime outputs.
 4. The execution backend consumes the adapter outputs to converge infrastructure or runtime configuration.
+
+## Effective Today Versus Declarative Intent
+
+Not every contract field has the same runtime weight today.
+
+Effective in validation, planning, or AWS Lambda bindings today:
+
+- workload identity and delivery target
+- resource attributes
+- propagators
+- enabled signals
+- signal ingestion mode
+- signal backend classes
+- metrics catalog
+- dashboards, alerts, SLO, and retention intent at planning level
+
+Currently more declarative than operational in this repository:
+
+- `semanticConventions`
+- `sampling`
+- `service.tier`
+- `service.lifecycle`
+- `status`
+
+These fields are still valid parts of the product model, but clients should not assume every one of them changes target adapter behavior today.
 
 ## What Application Teams Should Read Next
 

@@ -75,5 +75,70 @@ func validateSemantics(contract *v1alpha1.ObservabilityContract) error {
 		return fmt.Errorf("metrics catalog must not be empty when metrics are enabled")
 	}
 
+	if err := validateSignalSpec("traces", contract.Spec.Telemetry.Signals.Traces.Enabled, contract.Spec.Telemetry.Signals.Traces.BackendClass, contract.Spec.Telemetry.Signals.Traces.Ingestion); err != nil {
+		return err
+	}
+	if err := validateSignalSpec("metrics", contract.Spec.Telemetry.Signals.Metrics.Enabled, contract.Spec.Telemetry.Signals.Metrics.BackendClass, contract.Spec.Telemetry.Signals.Metrics.Ingestion); err != nil {
+		return err
+	}
+	if err := validateSignalSpec("logs", contract.Spec.Telemetry.Signals.Logs.Enabled, contract.Spec.Telemetry.Signals.Logs.BackendClass, contract.Spec.Telemetry.Signals.Logs.Ingestion); err != nil {
+		return err
+	}
+
+	if contract.Spec.Delivery.Target == "aws" && contract.Spec.Service.Runtime == "aws-lambda" {
+		if err := validateUniformIngestionForAWSLambda(contract); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateSignalSpec(name string, enabled bool, backendClass, ingestion string) error {
+	backendClass = strings.TrimSpace(backendClass)
+	ingestion = strings.TrimSpace(ingestion)
+
+	if !enabled {
+		return nil
+	}
+	if backendClass == "" {
+		return fmt.Errorf("%s.backendClass is required when %s.enabled is true", name, name)
+	}
+	if ingestion == "" {
+		return fmt.Errorf("%s.ingestion is required when %s.enabled is true", name, name)
+	}
+
+	return nil
+}
+
+func validateUniformIngestionForAWSLambda(contract *v1alpha1.ObservabilityContract) error {
+	ingestions := []string{}
+	signals := []struct {
+		name      string
+		enabled   bool
+		ingestion string
+	}{
+		{name: "traces", enabled: contract.Spec.Telemetry.Signals.Traces.Enabled, ingestion: strings.TrimSpace(contract.Spec.Telemetry.Signals.Traces.Ingestion)},
+		{name: "metrics", enabled: contract.Spec.Telemetry.Signals.Metrics.Enabled, ingestion: strings.TrimSpace(contract.Spec.Telemetry.Signals.Metrics.Ingestion)},
+		{name: "logs", enabled: contract.Spec.Telemetry.Signals.Logs.Enabled, ingestion: strings.TrimSpace(contract.Spec.Telemetry.Signals.Logs.Ingestion)},
+	}
+
+	for _, signal := range signals {
+		if signal.enabled {
+			ingestions = append(ingestions, signal.ingestion)
+		}
+	}
+
+	if len(ingestions) <= 1 {
+		return nil
+	}
+
+	expected := ingestions[0]
+	for _, ingestion := range ingestions[1:] {
+		if ingestion != expected {
+			return fmt.Errorf("aws-lambda bindings require one ingestion mode across all enabled signals; mixed direct and collector signal ingestion is not supported")
+		}
+	}
+
 	return nil
 }

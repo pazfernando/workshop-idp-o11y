@@ -258,7 +258,7 @@
     "signalSpec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "backendClass"],
+      "required": ["enabled"],
       "properties": {
         "enabled": { "type": "boolean" },
         "backendClass": { "type": "string" },
@@ -266,7 +266,19 @@
           "type": "string",
           "enum": ["direct", "collector"]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": { "const": true }
+            }
+          },
+          "then": {
+            "required": ["backendClass", "ingestion"]
+          }
+        }
+      ]
     },
     "metricSpec": {
       "type": "object",
@@ -289,7 +301,7 @@
     "metricsSignalSpec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "backendClass"],
+      "required": ["enabled"],
       "properties": {
         "enabled": { "type": "boolean" },
         "backendClass": { "type": "string" },
@@ -303,12 +315,24 @@
             "$ref": "#/$defs/metricSpec"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": { "const": true }
+            }
+          },
+          "then": {
+            "required": ["backendClass", "ingestion"]
+          }
+        }
+      ]
     },
     "logsSignalSpec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "backendClass"],
+      "required": ["enabled"],
       "properties": {
         "enabled": { "type": "boolean" },
         "backendClass": { "type": "string" },
@@ -320,7 +344,19 @@
           "type": "string",
           "enum": ["json", "text"]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": { "const": true }
+            }
+          },
+          "then": {
+            "required": ["backendClass", "ingestion"]
+          }
+        }
+      ]
     },
     "alertRule": {
       "type": "object",

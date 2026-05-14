@@ -11,6 +11,7 @@ This guide explains how an application team should create an `ObservabilityContr
 5. Add the platform capabilities you want in `spec.capabilities`.
 6. Validate the contract locally or in CI with `o11yctl validate`.
 7. Generate a plan with `o11yctl plan` and review the resulting classes, assets, and bindings.
+8. For AWS Lambda consumers, review the final bindings and handoff artifact to confirm the effective runtime implementation details that are intentionally outside the contract itself.
 
 ## Minimal Contract Skeleton
 
@@ -162,6 +163,9 @@ Guidance:
 - Use `ingestion: collector` when the platform should route through a managed observability data plane.
 - Use `ingestion: direct` only when the supported target adapter and backend path are designed for direct export.
 - `backendClass` is a platform-facing abstraction, not a vendor SKU.
+- When a signal is enabled, both `ingestion` and `backendClass` are required.
+- For AWS Lambda, all enabled signals must currently use the same ingestion mode because bindings materialize one effective export strategy for the runtime.
+- If a signal is disabled, clients may omit `ingestion` and `backendClass` for that signal.
 
 ### `spec.telemetry.signals.metrics.catalog`
 
@@ -208,6 +212,43 @@ Important validation rules enforced today:
 - `target: aws` requires `delivery.region`
 - `target: kubernetes` requires both `delivery.cluster` and `delivery.namespace`
 - when metrics are enabled, `metrics.catalog` must not be empty
+- when a signal is enabled, `ingestion` and `backendClass` must both be set
+- AWS Lambda contracts cannot mix `collector` and `direct` ingestion across enabled signals
+
+## Contract Versus Runtime Bindings
+
+The contract expresses observability intent. The client-facing runtime integration is completed later through target-specific bindings.
+
+For AWS Lambda in particular, the contract does not directly encode:
+
+- `instrumentation_mode`
+- ADOT layer attachment details
+- EMF compatibility mode
+- the final collector endpoint chosen by the workflow or managed suite
+
+Those values are resolved by the bindings path and returned to the client through `bindings.json` and the final handoff artifact.
+
+## Effective Fields Today
+
+Clients should treat these contract fields as effective today in validation, plan generation, or current AWS Lambda bindings:
+
+- `metadata`
+- `spec.delivery`
+- `spec.telemetry.resourceAttributes`
+- `spec.telemetry.openTelemetry.propagators`
+- `spec.telemetry.signals.*.enabled`
+- `spec.telemetry.signals.*.ingestion`
+- `spec.telemetry.signals.*.backendClass`
+- `spec.telemetry.signals.metrics.catalog`
+- `spec.capabilities.*` as planning intent
+
+Clients should treat these as valid model fields that are currently more declarative than operational in this repository:
+
+- `spec.telemetry.openTelemetry.semanticConventions`
+- `spec.telemetry.openTelemetry.sampling`
+- `spec.service.tier`
+- `spec.service.lifecycle`
+- `status`
 
 ## Supported Starting Examples
 
@@ -222,6 +263,8 @@ Important validation rules enforced today:
 
 - Omitting `delivery.region` for AWS workloads.
 - Enabling metrics without defining a catalog.
+- Enabling a signal without setting both `ingestion` and `backendClass`.
+- Mixing `collector` and `direct` ingestion in AWS Lambda contracts and expecting separate per-signal runtime export paths.
 - Treating `backendClass` as a vendor-specific implementation field.
 - Using unstable runtime values as resource attributes.
 - Requesting capabilities that are not yet supported by the target adapter in production flow.
