@@ -1,30 +1,10 @@
 name: Publish Caller Dashboard
+run-name: ${{ format('Publish Caller Dashboard ({0} / {1})', github.event.client_payload.caller_identifier || 'unknown', github.event.client_payload.dispatch_id || github.run_id) }}
 
 on:
-  workflow_call:
-    inputs:
-      managed_suite_name:
-        description: Base name used for managed-suite resources
-        required: false
-        default: o11y-platform
-        type: string
-      aws_region:
-        description: AWS region where the shared suite runs
-        required: false
-        default: us-east-1
-        type: string
-      caller_identifier:
-        description: Stable identifier for the caller deployment
-        required: true
-        type: string
-      caller_dashboard_uid:
-        description: Grafana dashboard UID for the caller-specific dashboard
-        required: true
-        type: string
-      caller_dashboard_title:
-        description: Grafana dashboard title for the caller-specific dashboard
-        required: true
-        type: string
+  repository_dispatch:
+    types:
+      - publish-caller-dashboard
 
 jobs:
   publish:
@@ -32,17 +12,21 @@ jobs:
     permissions:
       contents: read
     env:
-      AWS_REGION: ${{ inputs.aws_region }}
-      SUITE_NAME: ${{ inputs.managed_suite_name }}
+      AWS_REGION: ${{ github.event.client_payload.aws_region || 'us-east-1' }}
+      SUITE_NAME: ${{ github.event.client_payload.managed_suite_name || 'o11y-platform' }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', inputs.managed_suite_name) }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY != '' && vars.TF_STATE_KEY || format('platform/{0}.tfstate', github.event.client_payload.managed_suite_name || 'o11y-platform') }}
       GRAFANA_ADMIN_PASSWORD: ${{ secrets.OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD }}
     steps:
-      - name: Validate required secret
+      - name: Validate payload and required secret
         run: |
           set -euo pipefail
           if [ -z "$GRAFANA_ADMIN_PASSWORD" ]; then
             echo "OBSERVABILITY_SUITE_GRAFANA_ADMIN_PASSWORD must be configured in the host repository secrets." >&2
+            exit 1
+          fi
+          if [ -z "${{ github.event.client_payload.caller_identifier || '' }}" ] || [ -z "${{ github.event.client_payload.caller_dashboard_uid || '' }}" ] || [ -z "${{ github.event.client_payload.caller_dashboard_title || '' }}" ]; then
+            echo "repository_dispatch payload is missing one of: caller_identifier, caller_dashboard_uid, caller_dashboard_title." >&2
             exit 1
           fi
 
@@ -107,9 +91,9 @@ jobs:
       - name: Publish caller Grafana dashboard
         env:
           GRAFANA_URL: ${{ steps.suite.outputs.grafana_url }}
-          CALLER_IDENTIFIER: ${{ inputs.caller_identifier }}
-          CALLER_DASHBOARD_UID: ${{ inputs.caller_dashboard_uid }}
-          CALLER_DASHBOARD_TITLE: ${{ inputs.caller_dashboard_title }}
+          CALLER_IDENTIFIER: ${{ github.event.client_payload.caller_identifier }}
+          CALLER_DASHBOARD_UID: ${{ github.event.client_payload.caller_dashboard_uid }}
+          CALLER_DASHBOARD_TITLE: ${{ github.event.client_payload.caller_dashboard_title }}
         run: |
           set -euo pipefail
           DASHBOARD_TEMPLATE_PATH="${GITHUB_WORKSPACE}/infra/observability-suite/grafana-dashboard.json.tftpl"
@@ -168,9 +152,9 @@ jobs:
           {
             echo "## Caller Dashboard Result"
             echo
-            echo "- managed suite name: \`${{ inputs.managed_suite_name }}\`"
-            echo "- caller identifier: \`${{ inputs.caller_identifier }}\`"
+            echo "- managed suite name: \`${{ github.event.client_payload.managed_suite_name }}\`"
+            echo "- caller identifier: \`${{ github.event.client_payload.caller_identifier }}\`"
             echo "- grafana base url: \`${{ steps.suite.outputs.grafana_url }}\`"
-            echo "- caller dashboard url: \`${{ steps.suite.outputs.grafana_url }}/d/${{ inputs.caller_dashboard_uid }}\`"
+            echo "- caller dashboard url: \`${{ steps.suite.outputs.grafana_url }}/d/${{ github.event.client_payload.caller_dashboard_uid }}\`"
             echo "- otlp http endpoint: \`${{ steps.suite.outputs.otlp_http_endpoint }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
