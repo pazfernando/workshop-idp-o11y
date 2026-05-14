@@ -60,7 +60,7 @@ Additional AWS Lambda notes:
 
 - EMF compatibility mode defaults to `true`
 - when `direct` is used against inferred AWS endpoints, traces and metrics can be inferred but logs still require CloudWatch Logs or a collector-based route
-- when `collector` is used and the client does not provide `collector_endpoint`, the reusable workflow uses the managed-suite OTLP endpoint if it deployed the managed suite in the same run
+- when `collector` is used and the client does not provide `collector_endpoint`, the reusable workflow uses the managed-suite OTLP endpoint if it deployed the managed suite in the same run or reused a pre-existing one
 
 ## Capability Coverage
 

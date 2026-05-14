@@ -247,144 +247,6 @@ runs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
 
-    - name: Setup Terraform
-      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
-      uses: hashicorp/setup-terraform@v4
-      with:
-        terraform_wrapper: false
-
-    - name: Configure AWS credentials
-      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-        aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-        aws-region: ${{ steps.context.outputs.aws_region }}
-
-    - name: Resolve managed-suite state backend
-      id: ensure-state-bucket
-      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
-      shell: bash
-      env:
-        AWS_REGION: ${{ steps.context.outputs.aws_region }}
-        MANAGED_SUITE_NAME: ${{ steps.context.outputs.managed_suite_name }}
-        TF_STATE_BUCKET: ${{ steps.context.outputs.tf_state_bucket }}
-        DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
-      run: |
-        set -euo pipefail
-        ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-        if [ -n "$TF_STATE_BUCKET" ]; then
-          BUCKET_NAME="$TF_STATE_BUCKET"
-        else
-          PROJECT_SLUG="$(printf '%s' "$MANAGED_SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
-          PROJECT_SLUG="${PROJECT_SLUG#-}"
-          PROJECT_SLUG="${PROJECT_SLUG%-}"
-          BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
-          BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
-        fi
-
-        if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-          echo "Using existing Terraform state bucket: $BUCKET_NAME"
-        elif [ "$DEPLOY_MANAGED_SUITE" = "true" ]; then
-          if [ "$AWS_REGION" = "us-east-1" ]; then
-            aws s3api create-bucket --bucket "$BUCKET_NAME"
-          else
-            aws s3api create-bucket --bucket "$BUCKET_NAME" --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
-          fi
-
-          aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
-          aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-        else
-          echo "Managed-suite Terraform state bucket '$BUCKET_NAME' does not exist or is not accessible." >&2
-          exit 1
-        fi
-
-        {
-          echo "bucket_name=$BUCKET_NAME"
-          echo "state_key=${{ steps.context.outputs.tf_state_key }}"
-        } >> "$GITHUB_OUTPUT"
-
-        echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
-
-    - name: Initialize managed-suite Terraform
-      if: ${{ inputs.deploy_managed_suite == 'true' || inputs.reuse_managed_suite == 'true' }}
-      shell: bash
-      env:
-        AWS_REGION: ${{ steps.context.outputs.aws_region }}
-        TF_STATE_BUCKET: ${{ steps.ensure-state-bucket.outputs.bucket_name }}
-        TF_STATE_KEY: ${{ steps.ensure-state-bucket.outputs.state_key }}
-      run: |
-        set -euo pipefail
-        terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" init -reconfigure \
-          -backend-config="bucket=${TF_STATE_BUCKET}" \
-          -backend-config="key=${TF_STATE_KEY}" \
-          -backend-config="region=${AWS_REGION}"
-
-    - name: Apply managed suite
-      if: ${{ inputs.deploy_managed_suite == 'true' }}
-      shell: bash
-      env:
-        AWS_REGION: ${{ steps.context.outputs.aws_region }}
-        GRAFANA_ADMIN_PASSWORD: ${{ steps.context.outputs.grafana_admin_password }}
-        GRAFANA_ALLOWED_CIDRS: ${{ steps.context.outputs.grafana_allowed_cidrs }}
-        OTLP_ALLOWED_CIDRS: ${{ steps.context.outputs.otlp_allowed_cidrs }}
-        SSH_ALLOWED_CIDRS: ${{ steps.context.outputs.ssh_allowed_cidrs }}
-      run: |
-        set -euo pipefail
-        terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" apply -auto-approve \
-          -var="aws_region=${AWS_REGION}" \
-          -var="name=${{ inputs.managed_suite_name }}" \
-          -var="subnet_id=${{ inputs.managed_suite_subnet_id }}" \
-          -var="instance_type=${{ inputs.managed_suite_instance_type }}" \
-          -var="root_volume_size_gb=${{ inputs.managed_suite_root_volume_size_gb }}" \
-          -var="dashboard_uid=${{ inputs.managed_suite_dashboard_uid }}" \
-          -var="dashboard_title=${{ inputs.managed_suite_dashboard_title }}" \
-          -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
-          -var="grafana_allowed_cidrs=${GRAFANA_ALLOWED_CIDRS}" \
-          -var="otlp_allowed_cidrs=${OTLP_ALLOWED_CIDRS}" \
-          -var="ssh_allowed_cidrs=${SSH_ALLOWED_CIDRS}"
-
-    - name: Emit managed-suite results
-      id: managed-suite-results
-      shell: bash
-      run: |
-        set -euo pipefail
-        if [ "${{ inputs.deploy_managed_suite }}" = "true" ] || [ "${{ inputs.reuse_managed_suite }}" = "true" ]; then
-          GRAFANA_URL="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw grafana_url)"
-          OTLP_HTTP_ENDPOINT="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw otlp_http_endpoint)"
-          {
-            echo "managed_suite_enabled=true"
-            echo "managed_suite_grafana_url=$GRAFANA_URL"
-            echo "managed_suite_otlp_http_endpoint=$OTLP_HTTP_ENDPOINT"
-          } >> "$GITHUB_OUTPUT"
-        else
-          {
-            echo "managed_suite_enabled=false"
-            echo "managed_suite_grafana_url="
-            echo "managed_suite_otlp_http_endpoint="
-          } >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Resolve collector endpoint
-      id: resolve-collector
-      shell: bash
-      run: |
-        set -euo pipefail
-        EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
-        EFFECTIVE_COLLECTOR_SOURCE="explicit"
-        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
-          EFFECTIVE_COLLECTOR_SOURCE="none"
-        fi
-        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ steps.managed-suite-results.outputs.managed_suite_enabled }}" = "true" ]; then
-          EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
-          EFFECTIVE_COLLECTOR_SOURCE="managed_suite"
-        fi
-        {
-          echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT"
-          echo "effective_collector_source=$EFFECTIVE_COLLECTOR_SOURCE"
-        } >> "$GITHUB_OUTPUT"
-
     - name: Validate contract
       id: validate
       shell: bash
@@ -412,6 +274,186 @@ runs:
           echo "plan_json<<EOF"
           printf '%s\n' "$PLAN_JSON"
           echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Resolve managed-suite requirement
+      id: managed-suite-mode
+      shell: bash
+      env:
+        PLAN_JSON: ${{ steps.plan.outputs.plan_json }}
+        DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
+        REUSE_MANAGED_SUITE: ${{ inputs.reuse_managed_suite }}
+        COLLECTOR_ENDPOINT_INPUT: ${{ inputs.collector_endpoint }}
+      run: |
+        set -euo pipefail
+        INGESTION_MODE="$(
+          python3 - <<'PY'
+import json
+import os
+
+plan = json.loads(os.environ["PLAN_JSON"])
+print(plan.get("bindings", {}).get("ingestionMode", ""))
+PY
+        )"
+
+        NEEDS_MANAGED_SUITE=false
+        if [ "$DEPLOY_MANAGED_SUITE" = "true" ]; then
+          NEEDS_MANAGED_SUITE=true
+        elif [ "$REUSE_MANAGED_SUITE" = "true" ] && [ "$INGESTION_MODE" = "collector" ] && [ -z "$COLLECTOR_ENDPOINT_INPUT" ]; then
+          NEEDS_MANAGED_SUITE=true
+        fi
+
+        {
+          echo "ingestion_mode=$INGESTION_MODE"
+          echo "needs_managed_suite=$NEEDS_MANAGED_SUITE"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Setup Terraform
+      if: ${{ steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
+      uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_wrapper: false
+
+    - name: Configure AWS credentials
+      if: ${{ steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+        aws-region: ${{ steps.context.outputs.aws_region }}
+
+    - name: Resolve managed-suite state backend
+      id: ensure-state-bucket
+      if: ${{ steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
+      shell: bash
+      env:
+        AWS_REGION: ${{ steps.context.outputs.aws_region }}
+        MANAGED_SUITE_NAME: ${{ steps.context.outputs.managed_suite_name }}
+        TF_STATE_BUCKET: ${{ steps.context.outputs.tf_state_bucket }}
+        DEPLOY_MANAGED_SUITE: ${{ inputs.deploy_managed_suite }}
+        REUSE_MANAGED_SUITE: ${{ inputs.reuse_managed_suite }}
+      run: |
+        set -euo pipefail
+        ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+        if [ -n "$TF_STATE_BUCKET" ]; then
+          BUCKET_NAME="$TF_STATE_BUCKET"
+        else
+          PROJECT_SLUG="$(printf '%s' "$MANAGED_SUITE_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+          PROJECT_SLUG="${PROJECT_SLUG#-}"
+          PROJECT_SLUG="${PROJECT_SLUG%-}"
+          BUCKET_SUFFIX="${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+          BUCKET_NAME="${PROJECT_SLUG}-${BUCKET_SUFFIX}"
+        fi
+
+        if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+          echo "Using existing Terraform state bucket: $BUCKET_NAME"
+        elif [ "$DEPLOY_MANAGED_SUITE" = "true" ]; then
+          if [ "$AWS_REGION" = "us-east-1" ]; then
+            aws s3api create-bucket --bucket "$BUCKET_NAME"
+          else
+            aws s3api create-bucket --bucket "$BUCKET_NAME" --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
+          fi
+
+          aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
+          aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+        else
+          echo "Collector mode requires a managed-suite OTLP endpoint when collector_endpoint is not provided." >&2
+          echo "Managed-suite Terraform state bucket '$BUCKET_NAME' does not exist or is not accessible, so no pre-existing managed suite could be reused." >&2
+          echo "Provide collector_endpoint explicitly or create the managed suite before running this workflow." >&2
+          exit 1
+        fi
+
+        {
+          echo "bucket_name=$BUCKET_NAME"
+          echo "state_key=${{ steps.context.outputs.tf_state_key }}"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "TF_STATE_BUCKET=$BUCKET_NAME" >> "$GITHUB_ENV"
+
+    - name: Initialize managed-suite Terraform
+      if: ${{ steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
+      shell: bash
+      env:
+        AWS_REGION: ${{ steps.context.outputs.aws_region }}
+        TF_STATE_BUCKET: ${{ steps.ensure-state-bucket.outputs.bucket_name }}
+        TF_STATE_KEY: ${{ steps.ensure-state-bucket.outputs.state_key }}
+      run: |
+        set -euo pipefail
+        terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" init -reconfigure \
+          -backend-config="bucket=${TF_STATE_BUCKET}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}"
+
+    - name: Apply managed suite
+      if: ${{ inputs.deploy_managed_suite == 'true' && steps.managed-suite-mode.outputs.needs_managed_suite == 'true' }}
+      shell: bash
+      env:
+        AWS_REGION: ${{ steps.context.outputs.aws_region }}
+        GRAFANA_ADMIN_PASSWORD: ${{ steps.context.outputs.grafana_admin_password }}
+        GRAFANA_ALLOWED_CIDRS: ${{ steps.context.outputs.grafana_allowed_cidrs }}
+        OTLP_ALLOWED_CIDRS: ${{ steps.context.outputs.otlp_allowed_cidrs }}
+        SSH_ALLOWED_CIDRS: ${{ steps.context.outputs.ssh_allowed_cidrs }}
+      run: |
+        set -euo pipefail
+        terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" apply -auto-approve \
+          -var="aws_region=${AWS_REGION}" \
+          -var="name=${{ inputs.managed_suite_name }}" \
+          -var="subnet_id=${{ inputs.managed_suite_subnet_id }}" \
+          -var="instance_type=${{ inputs.managed_suite_instance_type }}" \
+          -var="root_volume_size_gb=${{ inputs.managed_suite_root_volume_size_gb }}" \
+          -var="dashboard_uid=${{ inputs.managed_suite_dashboard_uid }}" \
+          -var="dashboard_title=${{ inputs.managed_suite_dashboard_title }}" \
+          -var="grafana_admin_password=${GRAFANA_ADMIN_PASSWORD}" \
+          -var="grafana_allowed_cidrs=${GRAFANA_ALLOWED_CIDRS}" \
+          -var="otlp_allowed_cidrs=${OTLP_ALLOWED_CIDRS}" \
+          -var="ssh_allowed_cidrs=${SSH_ALLOWED_CIDRS}"
+
+    - name: Emit managed-suite results
+      id: managed-suite-results
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ steps.managed-suite-mode.outputs.needs_managed_suite }}" = "true" ]; then
+          GRAFANA_URL="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw grafana_url)"
+          OTLP_HTTP_ENDPOINT="$(terraform -chdir="${{ steps.context.outputs.platform_repo_path }}/infra/terraform/managed-suite" output -raw otlp_http_endpoint)"
+          {
+            echo "managed_suite_enabled=true"
+            echo "managed_suite_grafana_url=$GRAFANA_URL"
+            echo "managed_suite_otlp_http_endpoint=$OTLP_HTTP_ENDPOINT"
+          } >> "$GITHUB_OUTPUT"
+        else
+          {
+            echo "managed_suite_enabled=false"
+            echo "managed_suite_grafana_url="
+            echo "managed_suite_otlp_http_endpoint="
+          } >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Resolve collector endpoint
+      id: resolve-collector
+      shell: bash
+      env:
+        INGESTION_MODE: ${{ steps.managed-suite-mode.outputs.ingestion_mode }}
+      run: |
+        set -euo pipefail
+        EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
+        EFFECTIVE_COLLECTOR_SOURCE="explicit"
+        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
+          EFFECTIVE_COLLECTOR_SOURCE="none"
+        fi
+        if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ steps.managed-suite-results.outputs.managed_suite_enabled }}" = "true" ]; then
+          EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
+          EFFECTIVE_COLLECTOR_SOURCE="managed_suite"
+        fi
+        if [ "$INGESTION_MODE" = "collector" ] && [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
+          echo "Collector mode was requested by the contract, but no collector endpoint could be resolved." >&2
+          echo "Provide collector_endpoint explicitly or enable a reachable pre-existing/deployed managed suite." >&2
+          exit 1
+        fi
+        {
+          echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT"
+          echo "effective_collector_source=$EFFECTIVE_COLLECTOR_SOURCE"
         } >> "$GITHUB_OUTPUT"
 
     - name: Build bindings

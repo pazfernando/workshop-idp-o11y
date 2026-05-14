@@ -79,6 +79,8 @@ jobs:
 
 When `deploy_managed_suite: true` and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP HTTP endpoint as the effective collector endpoint for bindings generation.
 
+When `reuse_managed_suite: true`, `deploy_managed_suite: false`, and `collector_endpoint` is empty, the workflow attempts to reuse a pre-existing managed suite from remote Terraform state. If that suite cannot be resolved, the workflow fails before bindings generation with an explicit collector/missing-suite error.
+
 If both are set, the explicit `collector_endpoint` wins and the workflow emits that precedence in the run logs.
 
 When `deploy_managed_suite: true`, the workflow also applies the platform standard `Ensure Terraform state bucket` strategy so the suite never converges against local Terraform state.
@@ -157,7 +159,7 @@ The reusable workflow now enforces a few caller-facing rules before doing any ex
 
 - `instrumentation_mode` defaults to `code`
 - `emf_compatibility_mode` defaults to `true`
-- when the contract resolves to `collector` export strategy and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP endpoint if the managed suite was deployed
+- when the contract resolves to `collector` export strategy and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP endpoint if the managed suite was deployed or a pre-existing suite was reused
 - when the contract resolves to `direct` export strategy and no direct endpoints are supplied, the adapter can infer traces and metrics endpoints for AWS backends
 - in direct AWS inference mode, logs are not inferred as OTLP endpoints; application logs still land in CloudWatch Logs unless the client routes logs through a collector or another backend-specific path
 
