@@ -70,7 +70,7 @@ on:
       emf_compatibility_mode:
         description: Keep EMF compatibility mode enabled for AWS Lambda bindings.
         required: false
-        default: false
+        default: true
         type: boolean
       deploy_managed_suite:
         description: Deploy the platform-managed suite before generating bindings.
@@ -149,6 +149,9 @@ on:
       effective_collector_endpoint:
         description: Effective collector endpoint used for bindings generation.
         value: ${{ jobs.contract.outputs.effective_collector_endpoint }}
+      effective_collector_source:
+        description: Source of the effective collector endpoint: explicit, managed_suite, or none.
+        value: ${{ jobs.contract.outputs.effective_collector_source }}
 
 jobs:
   contract:
@@ -163,6 +166,7 @@ jobs:
       managed_suite_grafana_url: ${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}
       managed_suite_otlp_http_endpoint: ${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}
       effective_collector_endpoint: ${{ steps.resolve-collector.outputs.effective_collector_endpoint }}
+      effective_collector_source: ${{ steps.resolve-collector.outputs.effective_collector_source }}
     env:
       AWS_REGION: ${{ inputs.aws_region }}
       MANAGED_SUITE_NAME: ${{ inputs.managed_suite_name }}
@@ -352,10 +356,18 @@ jobs:
         run: |
           set -euo pipefail
           EFFECTIVE_COLLECTOR_ENDPOINT="${{ inputs.collector_endpoint }}"
+          EFFECTIVE_COLLECTOR_SOURCE="explicit"
+          if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ]; then
+            EFFECTIVE_COLLECTOR_SOURCE="none"
+          fi
           if [ -z "$EFFECTIVE_COLLECTOR_ENDPOINT" ] && [ "${{ inputs.deploy_managed_suite }}" = "true" ]; then
             EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
+            EFFECTIVE_COLLECTOR_SOURCE="managed_suite"
           fi
-          echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT" >> "$GITHUB_OUTPUT"
+          {
+            echo "effective_collector_endpoint=$EFFECTIVE_COLLECTOR_ENDPOINT"
+            echo "effective_collector_source=$EFFECTIVE_COLLECTOR_SOURCE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate contract
         id: validate
@@ -438,61 +450,193 @@ jobs:
             BINDINGS_PRESENT=false
           fi
 
-          cat > "$GITHUB_WORKSPACE/generated/client-handoff/implementation-summary.md" <<EOF
-          # Observability Implementation Summary
+          export CONTRACT_PATH_INPUT="${{ inputs.contract_path }}"
+          export BINDINGS_TARGET_INPUT="${{ inputs.bindings_target }}"
+          export GENERATE_BINDINGS_INPUT="${{ inputs.generate_bindings }}"
+          export BINDINGS_PRESENT
+          export MANAGED_SUITE_ENABLED="${{ steps.managed-suite-results.outputs.managed_suite_enabled }}"
+          export AWS_REGION_INPUT="${{ inputs.aws_region }}"
+          export EFFECTIVE_COLLECTOR_ENDPOINT="${{ steps.resolve-collector.outputs.effective_collector_endpoint }}"
+          export EFFECTIVE_COLLECTOR_SOURCE="${{ steps.resolve-collector.outputs.effective_collector_source }}"
+          export MANAGED_SUITE_GRAFANA_URL="${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}"
+          export MANAGED_SUITE_OTLP_HTTP_ENDPOINT="${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}"
+          export INSTRUMENTATION_MODE_INPUT="${{ inputs.instrumentation_mode }}"
+          export ADOT_LAMBDA_LAYER_ARN_INPUT="${{ inputs.adot_lambda_layer_arn }}"
+          export DIRECT_ENDPOINT_INPUT="${{ inputs.direct_endpoint }}"
+          export DIRECT_TRACES_ENDPOINT_INPUT="${{ inputs.direct_traces_endpoint }}"
+          export DIRECT_METRICS_ENDPOINT_INPUT="${{ inputs.direct_metrics_endpoint }}"
+          export COLLECTOR_TRACES_ENDPOINT_INPUT="${{ inputs.collector_traces_endpoint }}"
+          export COLLECTOR_METRICS_ENDPOINT_INPUT="${{ inputs.collector_metrics_endpoint }}"
+          export EMF_COMPATIBILITY_MODE_INPUT="${{ inputs.emf_compatibility_mode }}"
+          export METRIC_EXPORT_INTERVAL_MS_INPUT="${{ inputs.metric_export_interval_ms }}"
+          export GENERATED_DIR="$GITHUB_WORKSPACE/generated"
+          export HANDOFF_DIR="$GITHUB_WORKSPACE/generated/client-handoff"
 
-          ## Delivery Context
+          python3 <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-          - Contract path: \`${{ inputs.contract_path }}\`
-          - Bindings target: \`${{ inputs.bindings_target }}\`
-          - Bindings generated: \`${{ inputs.generate_bindings }}\`
-          - Managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`
-          - AWS region: \`${{ inputs.aws_region }}\`
+          generated_dir = Path(os.environ["GENERATED_DIR"])
+          handoff_dir = Path(os.environ["HANDOFF_DIR"])
+          bindings_present = os.environ["BINDINGS_PRESENT"] == "true"
 
-          ## Effective Runtime Integration
-
-          - Instrumentation mode: \`${{ inputs.instrumentation_mode }}\`
-          - Effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`
-          - EMF compatibility mode: \`${{ inputs.emf_compatibility_mode }}\`
-          - Metric export interval ms: \`${{ inputs.metric_export_interval_ms }}\`
-
-          ## Platform Endpoints
-
-          - Managed suite Grafana URL: \`${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}\`
-          - Managed suite OTLP HTTP endpoint: \`${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}\`
-
-          ## Delivered Files
-
-          - \`validation.txt\`
-          - \`plan.json\`
-          - \`bindings.json\` when bindings are enabled
-          - \`implementation-summary.md\`
-          - \`implementation-manifest.json\`
-
-          ## Client Next Steps
-
-          1. Review \`validation.txt\` to confirm the contract passed platform validation.
-          2. Review \`plan.json\` to understand the neutral platform plan.
-          3. If present, consume \`bindings.json\` in the deployment step that injects runtime configuration.
-          4. If the managed suite was deployed, use the Grafana URL and OTLP endpoint above for access and integration.
-          EOF
-
-          cat > "$GITHUB_WORKSPACE/generated/client-handoff/implementation-manifest.json" <<EOF
-          {
-            "contractPath": "${{ inputs.contract_path }}",
-            "bindingsTarget": "${{ inputs.bindings_target }}",
-            "bindingsGenerated": ${{ inputs.generate_bindings }},
-            "bindingsPresent": ${BINDINGS_PRESENT},
-            "managedSuiteEnabled": ${{ steps.managed-suite-results.outputs.managed_suite_enabled }},
-            "awsRegion": "${{ inputs.aws_region }}",
-            "instrumentationMode": "${{ inputs.instrumentation_mode }}",
-            "effectiveCollectorEndpoint": "${{ steps.resolve-collector.outputs.effective_collector_endpoint }}",
-            "managedSuiteGrafanaUrl": "${{ steps.managed-suite-results.outputs.managed_suite_grafana_url }}",
-            "managedSuiteOtlpHttpEndpoint": "${{ steps.managed-suite-results.outputs.managed_suite_otlp_http_endpoint }}",
-            "metricExportIntervalMs": ${{ inputs.metric_export_interval_ms }},
-            "emfCompatibilityMode": ${{ inputs.emf_compatibility_mode }}
+          binding_details = {
+              "instrumentationMode": os.environ["INSTRUMENTATION_MODE_INPUT"],
+              "exportStrategy": "unknown",
+              "otlpAuthenticationMode": "unknown",
+              "effectiveOtlpBaseEndpoint": "",
+              "effectiveOtlpTracesEndpoint": "",
+              "effectiveOtlpMetricsEndpoint": "",
+              "lambdaExecWrapper": "",
+              "adotLambdaLayerArn": os.environ["ADOT_LAMBDA_LAYER_ARN_INPUT"],
+              "layerCount": 0,
+              "managedPolicyCount": 0,
+              "requiredInputs": [],
+              "notes": [],
+              "emfCompatibilityMode": os.environ["EMF_COMPATIBILITY_MODE_INPUT"] == "true",
+              "metricExportIntervalMs": int(os.environ["METRIC_EXPORT_INTERVAL_MS_INPUT"]),
           }
-          EOF
+
+          if bindings_present:
+              bindings = json.loads((generated_dir / "bindings.json").read_text())
+              instr = bindings.get("instrumentation", {})
+              outputs = bindings.get("outputs", {})
+              binding_details.update({
+                  "instrumentationMode": instr.get("mode", binding_details["instrumentationMode"]),
+                  "exportStrategy": instr.get("exportStrategy", "unknown"),
+                  "otlpAuthenticationMode": instr.get("otlpAuthenticationMode", "unknown"),
+                  "effectiveOtlpBaseEndpoint": outputs.get("otlpBaseEndpoint", ""),
+                  "effectiveOtlpTracesEndpoint": outputs.get("otlpTracesEndpoint", ""),
+                  "effectiveOtlpMetricsEndpoint": outputs.get("otlpMetricsEndpoint", ""),
+                  "lambdaExecWrapper": outputs.get("lambdaExecWrapper", ""),
+                  "adotLambdaLayerArn": outputs.get("adotLambdaLayerArn", binding_details["adotLambdaLayerArn"]),
+                  "layerCount": len(bindings.get("layers", [])),
+                  "managedPolicyCount": len(bindings.get("managedPolicies", [])),
+                  "requiredInputs": bindings.get("requiredInputs", []),
+                  "notes": bindings.get("notes", []),
+                  "emfCompatibilityMode": instr.get("emfCompatibilityMode", binding_details["emfCompatibilityMode"]),
+                  "metricExportIntervalMs": instr.get("metricExportIntervalMs", binding_details["metricExportIntervalMs"]),
+              })
+
+          direct_inputs = {
+              "base": os.environ["DIRECT_ENDPOINT_INPUT"],
+              "traces": os.environ["DIRECT_TRACES_ENDPOINT_INPUT"],
+              "metrics": os.environ["DIRECT_METRICS_ENDPOINT_INPUT"],
+          }
+          collector_inputs = {
+              "base": os.environ["EFFECTIVE_COLLECTOR_ENDPOINT"],
+              "traces": os.environ["COLLECTOR_TRACES_ENDPOINT_INPUT"],
+              "metrics": os.environ["COLLECTOR_METRICS_ENDPOINT_INPUT"],
+          }
+
+          artifact_files = [
+              "validation.txt",
+              "plan.json",
+              "implementation-summary.md",
+              "implementation-manifest.json",
+          ]
+          if bindings_present:
+              artifact_files.insert(2, "bindings.json")
+
+          manifest = {
+              "contractPath": os.environ["CONTRACT_PATH_INPUT"],
+              "bindingsTarget": os.environ["BINDINGS_TARGET_INPUT"],
+              "bindingsGenerated": os.environ["GENERATE_BINDINGS_INPUT"] == "true",
+              "bindingsPresent": bindings_present,
+              "managedSuiteEnabled": os.environ["MANAGED_SUITE_ENABLED"] == "true",
+              "awsRegion": os.environ["AWS_REGION_INPUT"],
+              "effectiveCollector": {
+                  "endpoint": os.environ["EFFECTIVE_COLLECTOR_ENDPOINT"],
+                  "source": os.environ["EFFECTIVE_COLLECTOR_SOURCE"],
+              },
+              "managedSuite": {
+                  "grafanaUrl": os.environ["MANAGED_SUITE_GRAFANA_URL"],
+                  "otlpHttpEndpoint": os.environ["MANAGED_SUITE_OTLP_HTTP_ENDPOINT"],
+              },
+              "bindingImplementation": binding_details,
+              "requestedInputEndpoints": {
+                  "collector": collector_inputs,
+                  "direct": direct_inputs,
+              },
+              "artifactsProduced": artifact_files,
+          }
+
+          summary_lines = [
+              "# Observability Implementation Summary",
+              "",
+              "## Delivery Context",
+              "",
+              f"- Contract path: `{manifest['contractPath']}`",
+              f"- Bindings target: `{manifest['bindingsTarget']}`",
+              f"- Bindings generated: `{str(manifest['bindingsGenerated']).lower()}`",
+              f"- Bindings present: `{str(manifest['bindingsPresent']).lower()}`",
+              f"- Managed suite deployed: `{str(manifest['managedSuiteEnabled']).lower()}`",
+              f"- AWS region: `{manifest['awsRegion']}`",
+              "",
+              "## Effective Runtime Integration",
+              "",
+              f"- Instrumentation mode: `{binding_details['instrumentationMode']}`",
+              f"- Export strategy: `{binding_details['exportStrategy']}`",
+              f"- OTLP authentication mode: `{binding_details['otlpAuthenticationMode']}`",
+              f"- EMF compatibility mode: `{str(binding_details['emfCompatibilityMode']).lower()}`",
+              f"- Metric export interval ms: `{binding_details['metricExportIntervalMs']}`",
+              f"- Effective collector endpoint: `{manifest['effectiveCollector']['endpoint']}`",
+              f"- Effective collector source: `{manifest['effectiveCollector']['source']}`",
+              f"- Effective OTLP base endpoint: `{binding_details['effectiveOtlpBaseEndpoint']}`",
+              f"- Effective OTLP traces endpoint: `{binding_details['effectiveOtlpTracesEndpoint']}`",
+              f"- Effective OTLP metrics endpoint: `{binding_details['effectiveOtlpMetricsEndpoint']}`",
+              f"- Lambda exec wrapper: `{binding_details['lambdaExecWrapper']}`",
+              f"- ADOT Lambda layer ARN: `{binding_details['adotLambdaLayerArn']}`",
+              f"- Attached layer count: `{binding_details['layerCount']}`",
+              f"- Managed policy count: `{binding_details['managedPolicyCount']}`",
+              "",
+              "## Platform Endpoints",
+              "",
+              f"- Managed suite Grafana URL: `{manifest['managedSuite']['grafanaUrl']}`",
+              f"- Managed suite OTLP HTTP endpoint: `{manifest['managedSuite']['otlpHttpEndpoint']}`",
+              "",
+              "## Delivered Files",
+              "",
+          ]
+
+          summary_lines.extend([f"- `{name}`" for name in artifact_files])
+          summary_lines.extend([
+              "",
+              "## Required Follow-Up Inputs",
+              "",
+          ])
+
+          if binding_details["requiredInputs"]:
+              for item in binding_details["requiredInputs"]:
+                  summary_lines.append(f"- `{item['name']}`: {item['description']}")
+          else:
+              summary_lines.append("- `none`")
+
+          summary_lines.extend([
+              "",
+              "## Implementation Notes",
+              "",
+          ])
+          if binding_details["notes"]:
+              for note in binding_details["notes"]:
+                  summary_lines.append(f"- {note}")
+          else:
+              summary_lines.append("- No additional adapter notes were emitted.")
+
+          summary_lines.extend([
+              "",
+              "## Client Next Steps",
+              "",
+              "1. Review `validation.txt` to confirm the contract passed platform validation.",
+              "2. Review `plan.json` to understand the neutral platform plan.",
+              "3. If present, consume `bindings.json` in the deployment step that injects runtime configuration into the workload.",
+              "4. Use `implementation-manifest.json` as the exact record of the effective observability implementation and final produced artifacts.",
+          ])
+
+          (handoff_dir / "implementation-summary.md").write_text("\n".join(summary_lines) + "\n")
+          (handoff_dir / "implementation-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
           cp "$GITHUB_WORKSPACE/generated/validation.txt" "$GITHUB_WORKSPACE/generated/client-handoff/validation.txt"
           cp "$GITHUB_WORKSPACE/generated/plan.json" "$GITHUB_WORKSPACE/generated/client-handoff/plan.json"
@@ -511,6 +655,7 @@ jobs:
             echo "- bindings target: \`${{ inputs.bindings_target }}\`"
             echo "- managed suite deployed: \`${{ steps.managed-suite-results.outputs.managed_suite_enabled }}\`"
             echo "- effective collector endpoint: \`${{ steps.resolve-collector.outputs.effective_collector_endpoint }}\`"
+            echo "- effective collector source: \`${{ steps.resolve-collector.outputs.effective_collector_source }}\`"
             echo "- artifact upload enabled: \`${{ inputs.upload_artifacts }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 

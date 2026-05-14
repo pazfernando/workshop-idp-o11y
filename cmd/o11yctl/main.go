@@ -122,7 +122,7 @@ func runAWSLambdaBindings(args []string) error {
 	directTracesEndpoint := fs.String("direct-traces-endpoint", "", "Direct OTLP traces endpoint override")
 	directMetricsEndpoint := fs.String("direct-metrics-endpoint", "", "Direct OTLP metrics endpoint override")
 	metricExportIntervalMs := fs.Int("metric-export-interval-ms", 10000, "Metric export interval in milliseconds")
-	emfCompatibilityMode := fs.Bool("emf-compatibility-mode", false, "Keep EMF compatibility mode enabled")
+	emfCompatibilityMode := fs.Bool("emf-compatibility-mode", true, "Keep EMF compatibility mode enabled")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func runAWSLambdaBindings(args []string) error {
 		DirectTracesEndpoint:       *directTracesEndpoint,
 		DirectMetricsEndpoint:      *directMetricsEndpoint,
 		MetricExportIntervalMs:     *metricExportIntervalMs,
-		EnableEMFCompatibilityMode: *emfCompatibilityMode,
+		EnableEMFCompatibilityMode: emfCompatibilityMode,
 	})
 	if err != nil {
 		return err

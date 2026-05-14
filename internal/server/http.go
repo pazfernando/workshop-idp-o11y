@@ -36,7 +36,7 @@ type AWSLambdaBindingOptionsPayload struct {
 	DirectTracesEndpoint       string `json:"directTracesEndpoint"`
 	DirectMetricsEndpoint      string `json:"directMetricsEndpoint"`
 	MetricExportIntervalMs     int    `json:"metricExportIntervalMs"`
-	EnableEMFCompatibilityMode bool   `json:"enableEmfCompatibilityMode"`
+	EnableEMFCompatibilityMode *bool  `json:"enableEmfCompatibilityMode"`
 }
 
 func NewHTTPHandler() http.Handler {

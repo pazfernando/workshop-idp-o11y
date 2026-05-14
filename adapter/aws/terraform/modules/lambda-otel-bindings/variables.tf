@@ -104,7 +104,7 @@ variable "metric_export_interval_ms" {
 variable "enable_emf_compatibility_mode" {
   description = "Whether to preserve EMF compatibility mode while OTel rollout progresses."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "signals" {

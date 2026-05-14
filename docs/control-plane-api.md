@@ -68,10 +68,13 @@ AWS Lambda bindings accept:
   },
   "options": {
     "instrumentationMode": "code",
-    "collectorEndpoint": "http://collector.internal:4318"
+    "collectorEndpoint": "http://collector.internal:4318",
+    "enableEmfCompatibilityMode": true
   }
 }
 ```
+
+For AWS Lambda bindings, `enableEmfCompatibilityMode` defaults to `true` when omitted.
 
 The request contract is submitted as JSON and must conform to the same schema and semantic rules enforced by `o11yctl`.
 

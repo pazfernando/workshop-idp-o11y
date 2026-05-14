@@ -40,6 +40,7 @@ The AWS Lambda example in [examples/contracts/aws-lambda-order-processing.yaml](
 5. The planner resolves the AWS Lambda bindings class, collector class, and relevant assets.
 6. The AWS adapter produces Lambda-ready bindings.
 7. The client receives `plan.json`, `bindings.json`, and the final `o11y-client-handoff` artifact.
+8. The handoff package records the effective export strategy, endpoint source, EMF mode, adapter notes, required follow-up inputs, and produced artifacts so the client deployer knows exactly how observability was materialized.
 
 ## Workflow-First Consumption
 
@@ -85,7 +86,7 @@ The application team receives stable outputs rather than platform internals. Dep
 - OTLP collector or direct-export endpoints
 - Lambda layers or execution policy requirements
 - references to dashboards and platform-managed observability assets
-- the final `o11y-client-handoff` artifact with an implementation summary and manifest
+- the final `o11y-client-handoff` artifact with an implementation summary and manifest that describe the effective runtime integration, not only the requested inputs
 
 ## Related Documents
 

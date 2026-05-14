@@ -47,6 +47,21 @@ Not yet provided as a platform interface:
 | `collector` | Yes | Yes | Yes | Preferred mode for platform-managed routing |
 | `direct` | Yes | Yes | Yes | Supported for AWS Lambda bindings with target-specific constraints |
 
+## AWS Lambda Binding Combination Coverage
+
+| Instrumentation Mode | Export Strategy | Supported | Notes |
+| :--- | :--- | :--- | :--- |
+| `code` | `collector` | Yes | Recommended default for application teams that already own in-process OTel instrumentation |
+| `code` | `direct` | Yes | Supports explicit direct OTLP endpoints and AWS-inferred traces and metrics endpoints |
+| `adot_layer` | `collector` | Yes | Supported when the client deployment attaches the returned ADOT layer, wrapper, and policy requirements |
+| `adot_layer` | `direct` | Yes | Supported with the same client-side ADOT attachment responsibility as above |
+
+Additional AWS Lambda notes:
+
+- EMF compatibility mode defaults to `true`
+- when `direct` is used against inferred AWS endpoints, traces and metrics can be inferred but logs still require CloudWatch Logs or a collector-based route
+- when `collector` is used and the client does not provide `collector_endpoint`, the reusable workflow uses the managed-suite OTLP endpoint if it deployed the managed suite in the same run
+
 ## Capability Coverage
 
 | Capability | Contract | Plan | AWS Adapter Materialization | Notes |

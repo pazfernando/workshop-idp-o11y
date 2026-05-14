@@ -83,6 +83,8 @@ If both are set, the explicit `collector_endpoint` wins and the workflow emits t
 
 When `deploy_managed_suite: true`, the workflow also applies the platform standard `Ensure Terraform state bucket` strategy so the suite never converges against local Terraform state.
 
+For AWS Lambda bindings, `emf_compatibility_mode` defaults to `true`. Clients should only turn it off deliberately after confirming that their metrics path no longer depends on EMF compatibility behavior.
+
 ## What The Client Receives
 
 Workflow outputs:
@@ -94,8 +96,9 @@ Workflow outputs:
 - `managed_suite_grafana_url`
 - `managed_suite_otlp_http_endpoint`
 - `effective_collector_endpoint`
+- `effective_collector_source`
 
-The workflow also writes a short GitHub Actions job summary with the selected contract path, whether bindings were generated, whether the managed suite was deployed, and the effective collector endpoint.
+The workflow also writes a short GitHub Actions job summary with the selected contract path, whether bindings were generated, whether the managed suite was deployed, the effective collector endpoint, and whether that endpoint came from an explicit client input or from the platform-managed suite.
 
 Artifacts:
 
@@ -107,6 +110,26 @@ Artifacts:
 - uploaded artifact `o11y-client-handoff`
 
 The `o11y-client-handoff` artifact is the client-facing delivery package after the platform workflow finishes. It is intended to be the easiest thing for the client team to download, inspect, and pass to the deployment owner.
+
+The handoff package is also the authoritative record of the effective implementation chosen by the platform pipeline. In particular, `implementation-summary.md` and `implementation-manifest.json` now capture:
+
+- the effective instrumentation mode and export strategy
+- the OTLP authentication mode
+- the effective collector endpoint and whether it came from an explicit client input or the managed suite
+- the effective OTLP endpoints returned by the adapter
+- whether EMF compatibility remained enabled
+- whether ADOT wrapper, layers, and managed policies were required
+- any unresolved required inputs still left for the client deployment step
+- the exact files produced at the end of the workflow
+
+## Responsibility Split
+
+For AWS Lambda, the platform product generates bindings and deployment guidance; the client deployment still materializes the workload.
+
+- `instrumentation_mode: code` means the client application owns in-process OTel instrumentation and the platform returns runtime configuration.
+- `instrumentation_mode: adot_layer` means the platform returns the wrapper, layer, and policy requirements, but the client still has to attach those to the Lambda definition in its own deployment stack.
+
+The platform does not deploy the client Lambda itself.
 
 ## Required Secrets For Managed Suite Deployment
 
@@ -127,6 +150,14 @@ The reusable workflow now enforces a few caller-facing rules before doing any ex
 - `instrumentation_mode` must be `code` or `adot_layer`
 - managed-suite CIDR inputs must be valid JSON arrays
 - `managed_suite_name` must be non-empty when managed-suite deployment is enabled
+
+## AWS Lambda Binding Defaults And Notes
+
+- `instrumentation_mode` defaults to `code`
+- `emf_compatibility_mode` defaults to `true`
+- when the contract resolves to `collector` export strategy and `collector_endpoint` is empty, the workflow uses the managed-suite OTLP endpoint if the managed suite was deployed
+- when the contract resolves to `direct` export strategy and no direct endpoints are supplied, the adapter can infer traces and metrics endpoints for AWS backends
+- in direct AWS inference mode, logs are not inferred as OTLP endpoints; application logs still land in CloudWatch Logs unless the client routes logs through a collector or another backend-specific path
 
 ## How To Switch From Direct CLI Usage
 

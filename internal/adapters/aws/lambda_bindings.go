@@ -11,6 +11,7 @@ import (
 
 const (
 	defaultMetricExportIntervalMs = 10000
+	defaultEMFCompatibilityMode   = true
 	adotExecWrapper               = "/opt/otel-handler"
 	adotManagedPolicy             = "arn:aws:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy"
 )
@@ -25,7 +26,7 @@ type LambdaBindingOptions struct {
 	DirectTracesEndpoint       string
 	DirectMetricsEndpoint      string
 	MetricExportIntervalMs     int
-	EnableEMFCompatibilityMode bool
+	EnableEMFCompatibilityMode *bool
 }
 
 type LambdaBindings struct {
@@ -94,6 +95,10 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 	if metricInterval == 0 {
 		metricInterval = defaultMetricExportIntervalMs
 	}
+	emfCompatibilityMode := defaultEMFCompatibilityMode
+	if opts.EnableEMFCompatibilityMode != nil {
+		emfCompatibilityMode = *opts.EnableEMFCompatibilityMode
+	}
 
 	baseAttrs := copyMap(contract.Spec.Telemetry.ResourceAttributes)
 	baseAttrs["cloud.provider"] = "aws"
@@ -103,7 +108,7 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 
 	env := map[string]string{
 		"OBSERVABILITY_OTEL_ENABLED":           boolString(contract.Spec.Telemetry.OpenTelemetry.Enabled),
-		"OBSERVABILITY_EMF_COMPATIBILITY_MODE": boolString(opts.EnableEMFCompatibilityMode),
+		"OBSERVABILITY_EMF_COMPATIBILITY_MODE": boolString(emfCompatibilityMode),
 		"OTEL_EXPORTER_OTLP_PROTOCOL":          "http/protobuf",
 		"OTEL_EXPORT_STRATEGY":                 exportStrategy,
 		"OTEL_METRIC_EXPORT_INTERVAL_MS":       fmt.Sprintf("%d", metricInterval),
@@ -176,7 +181,7 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 			ExportStrategy:         exportStrategy,
 			OTLPAuthenticationMode: authMode,
 			MetricExportIntervalMs: metricInterval,
-			EMFCompatibilityMode:   opts.EnableEMFCompatibilityMode,
+			EMFCompatibilityMode:   emfCompatibilityMode,
 		},
 		Environment:     env,
 		Layers:          layers,

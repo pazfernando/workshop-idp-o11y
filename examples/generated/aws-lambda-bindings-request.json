@@ -70,7 +70,7 @@
   "options": {
     "instrumentationMode": "code",
     "collectorEndpoint": "http://collector.internal:4318",
-    "enableEmfCompatibilityMode": false,
+    "enableEmfCompatibilityMode": true,
     "metricExportIntervalMs": 10000
   }
 }
