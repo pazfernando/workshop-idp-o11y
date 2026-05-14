@@ -127,10 +127,14 @@ func signalCapabilities(contract *v1alpha1.ObservabilityContract) []CapabilityPl
 	if contract.Spec.Telemetry.Signals.Metrics.Enabled {
 		dashboardPreset := ""
 		supportedMetrics := []string{}
+		recommendedRuntimeMetrics := []string{}
 		if contract.Spec.Capabilities.Dashboards != nil {
 			dashboardPreset = contract.Spec.Capabilities.Dashboards.Preset
 			if metrics, ok := metriccatalog.SupportedMetrics(dashboardPreset); ok {
 				supportedMetrics = metrics
+			}
+			if metrics, ok := metriccatalog.RecommendedRuntimeMetrics(dashboardPreset); ok {
+				recommendedRuntimeMetrics = metrics
 			}
 		}
 		capabilities = append(capabilities, CapabilityPlan{
@@ -145,8 +149,8 @@ func signalCapabilities(contract *v1alpha1.ObservabilityContract) []CapabilityPl
 				"metricNames":           metricNames(contract.Spec.Telemetry.Signals.Metrics.Catalog),
 				"dashboardPreset":       dashboardPreset,
 				"supportedMetricNames":  supportedMetrics,
+				"recommendedRuntimeMetrics": recommendedRuntimeMetrics,
 				"metricSupportPolicy":   "preset-only",
-				"customMetricsAccepted": false,
 				"monitoredSLO":          contract.Spec.Capabilities.SLOs != nil && contract.Spec.Capabilities.SLOs.Enabled,
 			},
 		})
@@ -184,9 +188,10 @@ func dashboardCapabilities(contract *v1alpha1.ObservabilityContract) []Capabilit
 				"traces-pipeline",
 			},
 			Properties: map[string]any{
-				"preset":              contract.Spec.Capabilities.Dashboards.Preset,
-				"metricSupportPolicy": "preset-only",
-				"supportedMetrics":    supportedMetricsForPreset(contract.Spec.Capabilities.Dashboards.Preset),
+				"preset":                    contract.Spec.Capabilities.Dashboards.Preset,
+				"metricSupportPolicy":       "preset-only",
+				"supportedMetrics":          supportedMetricsForPreset(contract.Spec.Capabilities.Dashboards.Preset),
+				"recommendedRuntimeMetrics": recommendedRuntimeMetricsForPreset(contract.Spec.Capabilities.Dashboards.Preset),
 			},
 		},
 	}
@@ -293,6 +298,14 @@ func metricNames(metrics []v1alpha1.MetricSpec) []string {
 
 func supportedMetricsForPreset(preset string) []string {
 	metrics, ok := metriccatalog.SupportedMetrics(preset)
+	if !ok {
+		return nil
+	}
+	return metrics
+}
+
+func recommendedRuntimeMetricsForPreset(preset string) []string {
+	metrics, ok := metriccatalog.RecommendedRuntimeMetrics(preset)
 	if !ok {
 		return nil
 	}

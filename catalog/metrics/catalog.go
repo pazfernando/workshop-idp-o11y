@@ -15,10 +15,11 @@ import (
 var presetFS embed.FS
 
 type Preset struct {
-	Name        string   `yaml:"name"`
-	DisplayName string   `yaml:"displayName"`
-	Description string   `yaml:"description"`
-	Metrics     []string `yaml:"metrics"`
+	Name                     string   `yaml:"name"`
+	DisplayName              string   `yaml:"displayName"`
+	Description              string   `yaml:"description"`
+	ContractMetrics          []string `yaml:"contractMetrics"`
+	RecommendedRuntimeMetrics []string `yaml:"recommendedRuntimeMetrics"`
 }
 
 var (
@@ -45,7 +46,7 @@ func SupportedMetrics(name string) ([]string, bool) {
 		return nil, false
 	}
 
-	metrics := append([]string(nil), preset.Metrics...)
+	metrics := append([]string(nil), preset.ContractMetrics...)
 	sort.Strings(metrics)
 	return metrics, true
 }
@@ -61,6 +62,17 @@ func KnownPresets() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func RecommendedRuntimeMetrics(name string) ([]string, bool) {
+	preset, ok := Lookup(name)
+	if !ok {
+		return nil, false
+	}
+
+	metrics := append([]string(nil), preset.RecommendedRuntimeMetrics...)
+	sort.Strings(metrics)
+	return metrics, true
 }
 
 func ensureLoaded() error {
@@ -95,15 +107,25 @@ func ensureLoaded() error {
 				return
 			}
 
-			sanitizedMetrics := make([]string, 0, len(preset.Metrics))
-			for _, metric := range preset.Metrics {
+			sanitizedMetrics := make([]string, 0, len(preset.ContractMetrics))
+			for _, metric := range preset.ContractMetrics {
 				metric = strings.TrimSpace(metric)
 				if metric != "" {
 					sanitizedMetrics = append(sanitizedMetrics, metric)
 				}
 			}
 			sort.Strings(sanitizedMetrics)
-			preset.Metrics = sanitizedMetrics
+			preset.ContractMetrics = sanitizedMetrics
+
+			sanitizedRuntimeMetrics := make([]string, 0, len(preset.RecommendedRuntimeMetrics))
+			for _, metric := range preset.RecommendedRuntimeMetrics {
+				metric = strings.TrimSpace(metric)
+				if metric != "" {
+					sanitizedRuntimeMetrics = append(sanitizedRuntimeMetrics, metric)
+				}
+			}
+			sort.Strings(sanitizedRuntimeMetrics)
+			preset.RecommendedRuntimeMetrics = sanitizedRuntimeMetrics
 
 			loaded[preset.Name] = preset
 		}

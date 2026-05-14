@@ -78,8 +78,9 @@ func validContract() *v1alpha1.ObservabilityContract {
 							Ingestion:    "collector",
 						},
 						Catalog: []v1alpha1.MetricSpec{
-							{Name: "OrdersCreated", Type: "counter", Unit: "{order}", Description: "Orders"},
-							{Name: "CreateOrderLatencyMs", Type: "histogram", Unit: "ms", Description: "Latency"},
+							{Name: "HttpServerRequestCount", Type: "counter", Unit: "{request}", Description: "Requests"},
+							{Name: "HttpServerRequestDuration", Type: "histogram", Unit: "ms", Description: "Latency"},
+							{Name: "HttpServerRequestErrors", Type: "counter", Unit: "{error}", Description: "Errors"},
 						},
 					},
 					Logs: v1alpha1.LogsSignalSpec{

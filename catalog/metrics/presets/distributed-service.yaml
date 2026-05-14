@@ -1,0 +1,14 @@
+name: distributed-service
+displayName: Distributed Service
+description: Standard workload metrics for distributed or microservice-style applications.
+contractMetrics:
+  - InboundRequestCount
+  - InboundRequestDuration
+  - InboundRequestErrors
+  - OutboundDependencyCallCount
+  - OutboundDependencyCallDuration
+  - OutboundDependencyCallErrors
+recommendedRuntimeMetrics:
+  - process.cpu.utilization
+  - process.memory.usage
+  - process.thread.count

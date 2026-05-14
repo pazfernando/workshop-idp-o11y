@@ -1,6 +1,14 @@
 name: kubernetes-http-service
 displayName: Kubernetes HTTP Service
-description: Governed metric set for Kubernetes HTTP services.
-metrics:
-  - HttpServerRequests
-  - PaymentAuthorizations
+description: Standard workload metrics for HTTP services running on Kubernetes.
+contractMetrics:
+  - HttpServerRequestCount
+  - HttpServerRequestDuration
+  - HttpServerRequestErrors
+recommendedRuntimeMetrics:
+  - kubernetes.pod.cpu.usage
+  - kubernetes.pod.memory.working_set
+  - kubernetes.container.cpu.usage
+  - kubernetes.container.memory.working_set
+  - kubernetes.container.cpu.pressure
+  - kubernetes.container.memory.pressure

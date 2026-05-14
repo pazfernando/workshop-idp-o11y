@@ -1,10 +1,29 @@
 # Metrics Governance
 
-This document defines the intended product model for workload metrics, dashboard coverage, and metric approval in the observability platform.
+This document defines the current supported model for workload metrics in the observability platform.
 
-## Problem Statement
+## Current Boundary
 
-If every client defines arbitrary metrics with arbitrary dimensions, the platform quickly becomes hard to operate:
+The current product supports only metrics that belong to the repository-visible preset catalog under `catalog/metrics/presets/`.
+
+Supported today:
+
+- clients select metrics indirectly by choosing a supported dashboard preset
+- clients may include only metrics that belong to that preset in `spec.telemetry.signals.metrics.catalog`
+- validation rejects metrics outside the selected preset metric set
+- plan outputs, bindings notes, and handoff artifacts report this as a `preset-only` metric support policy
+
+Not supported today:
+
+- client-defined production metrics outside the preset catalog
+- productized approval or proposal workflow for new metrics
+- experimental metric onboarding path
+- `catalogRefs` or other governed metric reference fields in the contract
+- rich per-metric adapter coverage metadata in the catalog
+
+## Why The Boundary Exists
+
+If every client defines arbitrary metrics with arbitrary dimensions, the platform becomes hard to operate:
 
 - metric names drift across teams
 - semantic meaning becomes inconsistent
@@ -13,262 +32,88 @@ If every client defines arbitrary metrics with arbitrary dimensions, the platfor
 - dimensions can explode cardinality and cost
 - target adapters cannot provide predictable coverage
 
-For that reason, workload metrics should be governed platform API objects, not free-form backend-specific definitions.
-
-## Product Direction
-
-The platform should converge on a governed metric catalog model:
-
-- clients select from a platform-owned catalog of approved metrics
-- dashboard presets consume approved metrics from that catalog
-- adapters declare which catalog metrics they support and how they materialize them
-- clients can propose new metrics, but new definitions should not bypass governance in the normal production flow
-
-## Current Enforced Policy
-
-In the current repository state, the standard product path is stricter than the long-term vision:
-
-- only metrics that belong to supported dashboard presets are accepted
-- free-form client-defined production metrics outside preset coverage are rejected
-- plan outputs, bindings notes, and handoff artifacts report this as a `preset-only` metric support policy
-- the visible source of truth for those preset metric sets lives under `catalog/metrics/presets/`
+For that reason, the current repository intentionally limits standard product usage to a governed preset metric set.
 
 ## Current Catalog Location
 
-The current governed preset metric catalog is stored in repository-visible files:
+The current client-visible source of truth is:
 
 - `catalog/metrics/presets/serverless-api.yaml`
+- `catalog/metrics/presets/distributed-service.yaml`
 - `catalog/metrics/presets/kubernetes-http-service.yaml`
 - `catalog/metrics/presets/monolith-business-app.yaml`
 
-These files are the current client-visible source of truth for which metrics are accepted by each supported preset.
+These files define:
 
-## Roles And Responsibilities
+- `contractMetrics`: the standard workload metrics accepted in the contract for that preset
+- `recommendedRuntimeMetrics`: the target or platform metrics that should also be observed for that workload shape
 
-### Client Team
+## Why Runtime Metrics Vary By Preset
+
+The catalog intentionally separates workload metrics from runtime metrics.
+
+- `serverless-api` focuses on request throughput, latency, and errors in the contract, while recommending AWS Lambda runtime metrics such as invocations, duration, throttles, and concurrency
+- `kubernetes-http-service` keeps contract metrics centered on request throughput, latency, and errors, while recommending CPU, memory, and pressure metrics at pod or container level
+- `distributed-service` extends the contract metric set to include outbound dependency call metrics because dependency behavior is usually part of the service reliability surface
+- `monolith-business-app` keeps contract metrics centered on application operations while recommending process-level CPU, memory, and thread metrics for runtime health
+
+This is deliberate:
+
+- ephemeral serverless runtimes are usually better understood through latency, errors, concurrency, and throttling than through baseline CPU charts in the product contract
+- long-running workloads such as Kubernetes services, distributed services, and monoliths benefit more directly from CPU, memory, and pressure visibility
+- platform or target-native metrics remain important, but they are not all promoted to contract-authored workload metrics
+
+## Client Responsibilities
 
 The client team should:
 
-- select approved metrics that match the workload
-- request dashboard presets
-- propose new metrics only when an approved metric does not satisfy a legitimate workload need
-- instrument the application to emit the approved metric set
+- choose a supported dashboard preset
+- instrument the workload to emit the metrics required by that preset
+- declare only preset-supported metrics in the contract
 
 The client team should not:
 
-- create arbitrary production metrics with uncontrolled names or dimensions
-- treat dashboards as backend-specific handwritten resources in the standard platform flow
+- define arbitrary new production metrics in the standard platform flow
+- expect a proposal, approval, or exception workflow to exist in the current product path
+- treat dashboard definitions as backend-specific handwritten resources in the standard path
 
-### Platform / Observability Team
+## Platform Responsibilities
 
-The platform or observability team should:
+The platform currently owns:
 
-- own the governed metric catalog
-- define semantic rules for names, units, dimensions, and cardinality
-- define preset-to-metric mappings
-- define adapter support coverage for each approved metric
-- review and approve new metric proposals
+- the preset metric catalog
+- validation of metric-to-preset alignment
+- plan metadata describing preset-only support
+- target-specific notes and handoff reporting about supported metrics
 
-## Governed Metric Catalog Model
+## Contract Semantics Today
 
-The current preset files intentionally stay minimal and expose only the supported metric names for each preset.
+The contract still uses `spec.telemetry.signals.metrics.catalog`, but that field is not a free-form extension surface.
 
-The fuller long-term governed metric model should evolve toward metadata similar to the following conceptual structure:
+Today it means:
 
-```yaml
-id: business.order.created.count
-displayName: Orders Created
-signal: metrics
-otelName: business.order.created.count
-type: counter
-unit: "{order}"
-description: Successful order creation events.
-allowedDimensions:
-  - tenant
-  - region
-  - result
-cardinalityPolicy:
-  maxRecommendedDimensions: 3
-  forbiddenDimensions:
-    - user_id
-    - request_id
-support:
-  aws-lambda:
-    status: supported
-    dashboardPresets:
-      - serverless-api
-  kubernetes:
-    status: planned
-lifecycle:
-  status: approved
-  owner: observability-platform
-```
+- the client declares the subset of preset metrics used by the workload
+- the selected dashboard preset determines the allowed metric set
+- any metric outside that preset is rejected
+- runtime or platform-native metrics such as Lambda concurrency or Kubernetes CPU and memory remain adapter concerns, not contract metrics
 
-The key design point is that the metric identifier is stable and governed, while adapter-specific materialization stays behind the platform boundary.
+## Plan, Bindings, And Handoff
 
-## Dashboard Model
+The current implementation reflects the same policy across layers:
 
-Dashboard ownership should also be split cleanly:
+- validation enforces preset-only metric support
+- plan outputs include the selected preset, requested metric names, supported metric names, recommended runtime metrics, and `metricSupportPolicy: preset-only`
+- bindings emit notes that metric support is limited to the selected preset
+- the client handoff artifact records requested and supported preset metric names together with recommended runtime metrics
 
-- the client requests dashboard intent through a preset
-- the platform owns the preset definition
-- the preset maps to a known set of governed metrics
-- the adapter renders the best backend-specific dashboard implementation available for that target
+## Future Work
 
-That means the client does not define the final CloudWatch or Grafana dashboard layout in the standard platform path.
+Possible future enhancements, not supported today:
 
-## Adapter Coverage Model
+- richer metadata in `catalog/metrics/presets/`
+- stable governed metric IDs independent of display names
+- explicit adapter coverage metadata per metric
+- governed metric reference fields such as `catalogRefs`
+- a productized workflow for proposing or approving new metrics
 
-Each adapter should declare per governed metric:
-
-- `supported`
-- `partially_supported`
-- `not_supported`
-- backend materialization notes
-- supported dimensions
-- dashboard preset coverage
-- alert or SLO eligibility where relevant
-
-This is what prevents the metric contract from becoming ambiguous across runtimes and targets.
-
-## Contract Direction
-
-The current repository still models `spec.telemetry.signals.metrics.catalog` as contract-authored metric definitions, even though validation now restricts those entries to the selected preset catalog.
-
-The intended evolution is:
-
-1. keep the current field for transition compatibility
-2. introduce governed metric references as the primary path
-3. restrict free-form custom metric definitions to a proposal workflow
-
-Conceptually, the contract should move toward something like:
-
-```yaml
-metrics:
-  enabled: true
-  ingestion: collector
-  backendClass: metrics-standard
-  catalogRefs:
-    - business.order.created.count
-    - http.server.request.duration
-```
-
-An optional extension path could remain available:
-
-```yaml
-customMetrics:
-  - id: business.order.retry.count
-    type: counter
-    unit: "{retry}"
-    description: Order retry attempts.
-    governanceStatus: proposed
-```
-
-But custom metrics should not be treated as standard preset-ready metrics until governance approval completes.
-
-## Approval Workflow
-
-Metric approval should not be a blocker for normal delivery. The workflow should be lightweight and mostly asynchronous.
-
-### Fast Path
-
-If a client needs observability now:
-
-- they consume approved metrics from the catalog
-- they select a supported dashboard preset
-- the platform path proceeds immediately with no approval dependency
-
-This should be the default and should cover most workloads.
-
-### Proposal Path
-
-If a client needs a new metric that does not exist:
-
-1. the client submits a metric proposal
-2. the proposal includes semantic purpose, type, unit, candidate dimensions, expected usage, and expected dashboard or alert use
-3. the platform team reviews naming, overlap, cardinality, and cross-workload reuse potential
-4. the proposal is either:
-   - approved into the governed catalog
-   - approved with changes
-   - rejected in favor of an existing metric
-   - accepted as workload-local experimental metric
-
-### Experimental Path
-
-To avoid blocking delivery, the platform can allow temporary experimental metrics under clear limits:
-
-- marked as `experimental`
-- not eligible for standard dashboard presets by default
-- not guaranteed across adapters
-- dimension policy enforced
-- time-boxed for later catalog review
-
-This prevents governance from becoming a delivery stopper while still protecting the platform surface.
-
-## Approval Criteria
-
-The review should answer a small set of concrete questions:
-
-- Is the metric semantically distinct from an existing approved metric?
-- Is the name stable and backend-neutral?
-- Is the unit correct and unambiguous?
-- Are the dimensions operationally useful and cardinality-safe?
-- Is this metric likely reusable by more than one workload or class of workload?
-- Does at least one current or planned adapter have a credible materialization path?
-- Does the metric belong in a standard dashboard preset, a workload-specific extension, or both?
-
-## Proposed Lifecycle States
-
-The metric catalog should support simple lifecycle states:
-
-- `proposed`
-- `experimental`
-- `approved`
-- `deprecated`
-
-Clients should freely consume `approved` metrics.
-
-`experimental` metrics may be used with explicit caveats and reduced platform guarantees.
-
-`deprecated` metrics should remain readable for transition periods but should no longer be recommended in new contracts.
-
-## Handoff Expectations
-
-The client handoff artifact should eventually report:
-
-- requested governed metrics
-- approved metrics resolved for the workload
-- dashboard presets requested
-- dashboard presets materialized
-- metrics supported by the selected adapter
-- metrics partially supported or unsupported
-- any experimental metrics accepted with caveats
-
-This gives the deployment owner an exact record of what observability coverage was actually delivered.
-
-## Implementation Roadmap
-
-Suggested sequence:
-
-1. expand the preset catalog files with richer metric metadata and governance fields
-2. add adapter coverage metadata for the first supported target
-3. introduce `catalogRefs` as a preferred contract path
-4. keep free-form `metrics.catalog` only as a transitional compatibility field
-5. connect dashboard presets to explicit metric coverage
-6. expose coverage in plan outputs and client handoff artifacts
-7. add productized proposal workflow semantics for future metric expansion
-
-## Current Repository Status
-
-Today, the repository is only partially at this destination:
-
-- the repository now has a visible preset metric catalog under `catalog/metrics/presets/`
-- the contract already treats the metrics catalog as central intent
-- dashboard presets already exist
-- validation now enforces preset-only metric support
-- plan outputs and handoff artifacts now report preset metric support semantics
-- adapter dashboard materialization is still partial
-- governed metric references are not yet the primary contract path
-- rich metric metadata and approval workflow are not yet implemented in product interfaces
-
-This document describes the intended hardening direction.
+Until those exist, the supported answer is simple: only catalog-backed preset metrics are allowed.

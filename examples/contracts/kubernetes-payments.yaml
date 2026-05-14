@@ -47,16 +47,21 @@ spec:
         ingestion: collector
         backendClass: metrics-standard
         catalog:
-          - name: HttpServerRequests
+          - name: HttpServerRequestCount
+            type: counter
+            unit: "{request}"
+            description: Total HTTP requests handled by the Kubernetes service.
+            dimensions: [http.route, http.request.method, http.response.status_code]
+          - name: HttpServerRequestDuration
             type: histogram
             unit: ms
-            description: Server request latency.
+            description: End-to-end HTTP request latency for the Kubernetes service.
             dimensions: [http.route, http.request.method, http.response.status_code]
-          - name: PaymentAuthorizations
+          - name: HttpServerRequestErrors
             type: counter
-            unit: "{authorization}"
-            description: Payment authorization attempts.
-            dimensions: [result, provider]
+            unit: "{error}"
+            description: HTTP requests that completed with server-side failure conditions.
+            dimensions: [http.route, http.request.method, http.response.status_code]
       logs:
         enabled: true
         ingestion: collector

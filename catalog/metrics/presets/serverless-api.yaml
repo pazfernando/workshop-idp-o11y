@@ -1,6 +1,13 @@
 name: serverless-api
 displayName: Serverless API
-description: Governed metric set for AWS Lambda and API-style serverless workloads.
-metrics:
-  - OrdersCreated
-  - CreateOrderLatencyMs
+description: Standard workload metrics for HTTP-oriented serverless APIs.
+contractMetrics:
+  - HttpServerRequestCount
+  - HttpServerRequestDuration
+  - HttpServerRequestErrors
+recommendedRuntimeMetrics:
+  - aws.lambda.invocations
+  - aws.lambda.errors
+  - aws.lambda.duration
+  - aws.lambda.throttles
+  - aws.lambda.concurrent_executions

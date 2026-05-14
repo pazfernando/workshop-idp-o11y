@@ -176,6 +176,7 @@ Current product rule:
 - only metrics that belong to the selected supported dashboard preset are accepted today
 - the metrics catalog is not currently a free-form production extension surface
 - the current preset metric catalog is published under `catalog/metrics/presets/`
+- runtime metrics such as Lambda concurrency or Kubernetes CPU and memory are adapter concerns and may be recommended by the preset catalog without becoming contract-authored workload metrics
 
 Each metric should define:
 
@@ -188,7 +189,8 @@ Recommended practice:
 
 - include dimensions only when they are operationally useful
 - avoid uncontrolled high-cardinality dimensions
-- name the metric after a meaningful domain event or user-visible operation
+- use the canonical preset metric names published in `catalog/metrics/presets/`
+- treat runtime metrics such as CPU, memory, concurrency, throttling, or pressure as adapter or platform metrics unless the preset explicitly exposes them as contract metrics
 
 ### `spec.capabilities`
 

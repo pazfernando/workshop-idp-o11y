@@ -502,6 +502,7 @@ jobs:
               "dashboardPreset": "",
               "requestedMetricNames": [],
               "supportedMetricNames": [],
+              "recommendedRuntimeMetrics": [],
           }
 
           plan = json.loads((generated_dir / "plan.json").read_text())
@@ -513,6 +514,7 @@ jobs:
                       "dashboardPreset": properties.get("dashboardPreset", ""),
                       "requestedMetricNames": properties.get("metricNames", []),
                       "supportedMetricNames": properties.get("supportedMetricNames", []),
+                      "recommendedRuntimeMetrics": properties.get("recommendedRuntimeMetrics", []),
                   })
                   break
 
@@ -627,6 +629,9 @@ jobs:
           summary_lines.extend([f"- Supported preset metric: `{name}`" for name in metric_coverage["supportedMetricNames"]])
           if not metric_coverage["supportedMetricNames"]:
               summary_lines.append("- Supported preset metric: `none`")
+          summary_lines.extend([f"- Recommended runtime metric: `{name}`" for name in metric_coverage["recommendedRuntimeMetrics"]])
+          if not metric_coverage["recommendedRuntimeMetrics"]:
+              summary_lines.append("- Recommended runtime metric: `none`")
 
           summary_lines.extend([
               "",

@@ -44,16 +44,22 @@
             "ingestion": "collector",
             "catalog": [
               {
-                "name": "OrdersCreated",
+                "name": "HttpServerRequestCount",
                 "type": "counter",
-                "unit": "{order}",
-                "description": "Number of created orders"
+                "unit": "{request}",
+                "description": "Total HTTP requests"
               },
               {
-                "name": "CreateOrderLatencyMs",
+                "name": "HttpServerRequestDuration",
                 "type": "histogram",
                 "unit": "ms",
-                "description": "Latency of order creation"
+                "description": "HTTP request latency"
+              },
+              {
+                "name": "HttpServerRequestErrors",
+                "type": "counter",
+                "unit": "{error}",
+                "description": "HTTP request errors"
               }
             ]
           },

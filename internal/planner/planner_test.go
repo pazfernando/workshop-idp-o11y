@@ -30,8 +30,16 @@ func TestBuildIncludesPresetMetricSupportMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected supportedMetricNames to be []string, got %T", metricsCapability.Properties["supportedMetricNames"])
 	}
-	if len(supportedMetrics) != 2 {
-		t.Fatalf("expected two supported metrics, got %v", supportedMetrics)
+	if len(supportedMetrics) != 3 {
+		t.Fatalf("expected three supported metrics, got %v", supportedMetrics)
+	}
+
+	runtimeMetrics, ok := metricsCapability.Properties["recommendedRuntimeMetrics"].([]string)
+	if !ok {
+		t.Fatalf("expected recommendedRuntimeMetrics to be []string, got %T", metricsCapability.Properties["recommendedRuntimeMetrics"])
+	}
+	if len(runtimeMetrics) == 0 {
+		t.Fatalf("expected recommended runtime metrics, got %v", runtimeMetrics)
 	}
 }
 
@@ -90,8 +98,9 @@ func validContract() *v1alpha1.ObservabilityContract {
 							Ingestion:    "collector",
 						},
 						Catalog: []v1alpha1.MetricSpec{
-							{Name: "OrdersCreated", Type: "counter", Unit: "{order}", Description: "Orders created"},
-							{Name: "CreateOrderLatencyMs", Type: "histogram", Unit: "ms", Description: "Order latency"},
+							{Name: "HttpServerRequestCount", Type: "counter", Unit: "{request}", Description: "Request count"},
+							{Name: "HttpServerRequestDuration", Type: "histogram", Unit: "ms", Description: "Request latency"},
+							{Name: "HttpServerRequestErrors", Type: "counter", Unit: "{error}", Description: "Request errors"},
 						},
 					},
 					Logs: v1alpha1.LogsSignalSpec{

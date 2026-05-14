@@ -43,15 +43,20 @@ spec:
         ingestion: collector
         backendClass: metrics-standard
         catalog:
-          - name: CustomerSearchLatency
+          - name: ApplicationOperationCount
+            type: counter
+            unit: "{operation}"
+            description: Total business operations handled by the application.
+            dimensions: [operation, result]
+          - name: ApplicationOperationDuration
             type: histogram
             unit: ms
-            description: Latency of customer search operations.
+            description: End-to-end application operation latency.
             dimensions: [operation]
-          - name: CustomerSearchErrors
+          - name: ApplicationOperationErrors
             type: counter
             unit: "{error}"
-            description: Errors during customer search.
+            description: Application operations that ended in failure.
             dimensions: [operation]
       logs:
         enabled: true
@@ -68,7 +73,7 @@ spec:
         - name: crm-search-errors
           summary: CRM search errors above threshold.
           severity: medium
-          condition: sum(CustomerSearchErrors) > 5
+          condition: sum(ApplicationOperationErrors) > 5
           for: 10m
     slos:
       enabled: true
