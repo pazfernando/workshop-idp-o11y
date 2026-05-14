@@ -1,46 +1,34 @@
-package server
+package aws
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
 )
 
-func TestValidateEndpoint(t *testing.T) {
+func TestBuildLambdaBindingsIncludesPresetMetricSupportNote(t *testing.T) {
 	t.Parallel()
 
-	payload := ValidateRequest{Contract: validContract()}
-	body, err := json.Marshal(payload)
+	emf := true
+	bindings, err := BuildLambdaBindings(validContract(), LambdaBindingOptions{
+		InstrumentationMode:        "code",
+		CollectorEndpoint:          "http://collector.internal:4318",
+		EnableEMFCompatibilityMode: &emf,
+	})
 	if err != nil {
-		t.Fatalf("marshal request: %v", err)
+		t.Fatalf("build bindings: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/validate", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	NewHTTPHandler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	found := false
+	for _, note := range bindings.Notes {
+		if strings.Contains(note, "Current metric support is limited to dashboard preset") {
+			found = true
+			break
+		}
 	}
-}
-
-func TestPlanEndpointRejectsMissingContract(t *testing.T) {
-	t.Parallel()
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/plan", bytes.NewReader([]byte(`{}`)))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	NewHTTPHandler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	if !found {
+		t.Fatalf("expected preset metric support note, got %v", bindings.Notes)
 	}
 }
 
@@ -59,7 +47,7 @@ func validContract() *v1alpha1.ObservabilityContract {
 				Name:      "order-processing",
 				Runtime:   "aws-lambda",
 				Language:  "nodejs",
-				Framework: "lambda",
+				Framework: "aws-serverless",
 			},
 			Delivery: v1alpha1.Delivery{
 				Mode:   "provision",
@@ -69,46 +57,35 @@ func validContract() *v1alpha1.ObservabilityContract {
 			Telemetry: v1alpha1.Telemetry{
 				OpenTelemetry: v1alpha1.OpenTelemetryConfig{
 					Enabled:             true,
-					SemanticConventions: "1.26.0",
+					SemanticConventions: "opentelemetry",
 					Propagators:         []string{"tracecontext", "baggage", "xray"},
 				},
 				ResourceAttributes: map[string]string{
 					"service.name":           "order-processing",
-					"service.namespace":      "commerce",
-					"service.version":        "1.0.0",
+					"service.namespace":      "workshop",
 					"deployment.environment": "dev",
 				},
 				Signals: v1alpha1.Signals{
 					Traces: v1alpha1.SignalSpec{
 						Enabled:      true,
-						BackendClass: "aws-xray",
+						BackendClass: "traces-standard",
 						Ingestion:    "collector",
 					},
 					Metrics: v1alpha1.MetricsSignalSpec{
 						SignalSpec: v1alpha1.SignalSpec{
 							Enabled:      true,
-							BackendClass: "aws-cloudwatch-metrics",
+							BackendClass: "metrics-standard",
 							Ingestion:    "collector",
 						},
 						Catalog: []v1alpha1.MetricSpec{
-							{
-								Name:        "OrdersCreated",
-								Type:        "counter",
-								Unit:        "{order}",
-								Description: "Number of created orders",
-							},
-							{
-								Name:        "CreateOrderLatencyMs",
-								Type:        "histogram",
-								Unit:        "ms",
-								Description: "Latency of order creation",
-							},
+							{Name: "OrdersCreated", Type: "counter", Unit: "{order}", Description: "Orders"},
+							{Name: "CreateOrderLatencyMs", Type: "histogram", Unit: "ms", Description: "Latency"},
 						},
 					},
 					Logs: v1alpha1.LogsSignalSpec{
 						SignalSpec: v1alpha1.SignalSpec{
 							Enabled:      true,
-							BackendClass: "aws-cloudwatch-logs",
+							BackendClass: "logs-standard",
 							Ingestion:    "collector",
 						},
 						Format: "json",

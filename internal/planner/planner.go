@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
+	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 )
 
 type ProvisioningPlan struct {
@@ -124,17 +125,29 @@ func signalCapabilities(contract *v1alpha1.ObservabilityContract) []CapabilityPl
 	}
 
 	if contract.Spec.Telemetry.Signals.Metrics.Enabled {
+		dashboardPreset := ""
+		supportedMetrics := []string{}
+		if contract.Spec.Capabilities.Dashboards != nil {
+			dashboardPreset = contract.Spec.Capabilities.Dashboards.Preset
+			if metrics, ok := metricspreset.SupportedMetrics(dashboardPreset); ok {
+				supportedMetrics = metrics
+			}
+		}
 		capabilities = append(capabilities, CapabilityPlan{
 			Name:         "metrics-pipeline",
 			Kind:         "signal",
 			BackendClass: contract.Spec.Telemetry.Signals.Metrics.BackendClass,
 			Intent:       describeSignalIntent(contract.Spec.Delivery.Target, "metrics"),
 			Properties: map[string]any{
-				"signal":       "metrics",
-				"ingestion":    contract.Spec.Telemetry.Signals.Metrics.Ingestion,
-				"metricCount":  len(contract.Spec.Telemetry.Signals.Metrics.Catalog),
-				"metricNames":  metricNames(contract.Spec.Telemetry.Signals.Metrics.Catalog),
-				"monitoredSLO": contract.Spec.Capabilities.SLOs != nil && contract.Spec.Capabilities.SLOs.Enabled,
+				"signal":                "metrics",
+				"ingestion":             contract.Spec.Telemetry.Signals.Metrics.Ingestion,
+				"metricCount":           len(contract.Spec.Telemetry.Signals.Metrics.Catalog),
+				"metricNames":           metricNames(contract.Spec.Telemetry.Signals.Metrics.Catalog),
+				"dashboardPreset":       dashboardPreset,
+				"supportedMetricNames":  supportedMetrics,
+				"metricSupportPolicy":   "preset-only",
+				"customMetricsAccepted": false,
+				"monitoredSLO":          contract.Spec.Capabilities.SLOs != nil && contract.Spec.Capabilities.SLOs.Enabled,
 			},
 		})
 	}
@@ -171,7 +184,9 @@ func dashboardCapabilities(contract *v1alpha1.ObservabilityContract) []Capabilit
 				"traces-pipeline",
 			},
 			Properties: map[string]any{
-				"preset": contract.Spec.Capabilities.Dashboards.Preset,
+				"preset":              contract.Spec.Capabilities.Dashboards.Preset,
+				"metricSupportPolicy": "preset-only",
+				"supportedMetrics":    supportedMetricsForPreset(contract.Spec.Capabilities.Dashboards.Preset),
 			},
 		},
 	}
@@ -274,6 +289,14 @@ func metricNames(metrics []v1alpha1.MetricSpec) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func supportedMetricsForPreset(preset string) []string {
+	metrics, ok := metricspreset.SupportedMetrics(preset)
+	if !ok {
+		return nil
+	}
+	return metrics
 }
 
 func classPlans(contract *v1alpha1.ObservabilityContract) []ClassPlan {

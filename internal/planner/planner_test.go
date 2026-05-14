@@ -1,47 +1,47 @@
-package server
+package planner
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
 )
 
-func TestValidateEndpoint(t *testing.T) {
+func TestBuildIncludesPresetMetricSupportMetadata(t *testing.T) {
 	t.Parallel()
 
-	payload := ValidateRequest{Contract: validContract()}
-	body, err := json.Marshal(payload)
+	plan, err := Build(validContract())
 	if err != nil {
-		t.Fatalf("marshal request: %v", err)
+		t.Fatalf("build plan: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/validate", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
+	metricsCapability := capabilityByName(plan, "metrics-pipeline")
+	if metricsCapability == nil {
+		t.Fatalf("expected metrics-pipeline capability")
+	}
 
-	NewHTTPHandler().ServeHTTP(rec, req)
+	if got := metricsCapability.Properties["metricSupportPolicy"]; got != "preset-only" {
+		t.Fatalf("expected preset-only support policy, got %v", got)
+	}
+	if got := metricsCapability.Properties["dashboardPreset"]; got != "serverless-api" {
+		t.Fatalf("expected serverless-api preset, got %v", got)
+	}
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	supportedMetrics, ok := metricsCapability.Properties["supportedMetricNames"].([]string)
+	if !ok {
+		t.Fatalf("expected supportedMetricNames to be []string, got %T", metricsCapability.Properties["supportedMetricNames"])
+	}
+	if len(supportedMetrics) != 2 {
+		t.Fatalf("expected two supported metrics, got %v", supportedMetrics)
 	}
 }
 
-func TestPlanEndpointRejectsMissingContract(t *testing.T) {
-	t.Parallel()
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/plan", bytes.NewReader([]byte(`{}`)))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	NewHTTPHandler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+func capabilityByName(plan *ProvisioningPlan, name string) *CapabilityPlan {
+	for i := range plan.Capabilities {
+		if plan.Capabilities[i].Name == name {
+			return &plan.Capabilities[i]
+		}
 	}
+	return nil
 }
 
 func validContract() *v1alpha1.ObservabilityContract {
@@ -69,13 +69,12 @@ func validContract() *v1alpha1.ObservabilityContract {
 			Telemetry: v1alpha1.Telemetry{
 				OpenTelemetry: v1alpha1.OpenTelemetryConfig{
 					Enabled:             true,
-					SemanticConventions: "1.26.0",
+					SemanticConventions: "opentelemetry",
 					Propagators:         []string{"tracecontext", "baggage", "xray"},
 				},
 				ResourceAttributes: map[string]string{
 					"service.name":           "order-processing",
 					"service.namespace":      "commerce",
-					"service.version":        "1.0.0",
 					"deployment.environment": "dev",
 				},
 				Signals: v1alpha1.Signals{
@@ -91,18 +90,8 @@ func validContract() *v1alpha1.ObservabilityContract {
 							Ingestion:    "collector",
 						},
 						Catalog: []v1alpha1.MetricSpec{
-							{
-								Name:        "OrdersCreated",
-								Type:        "counter",
-								Unit:        "{order}",
-								Description: "Number of created orders",
-							},
-							{
-								Name:        "CreateOrderLatencyMs",
-								Type:        "histogram",
-								Unit:        "ms",
-								Description: "Latency of order creation",
-							},
+							{Name: "OrdersCreated", Type: "counter", Unit: "{order}", Description: "Orders created"},
+							{Name: "CreateOrderLatencyMs", Type: "histogram", Unit: "ms", Description: "Order latency"},
 						},
 					},
 					Logs: v1alpha1.LogsSignalSpec{

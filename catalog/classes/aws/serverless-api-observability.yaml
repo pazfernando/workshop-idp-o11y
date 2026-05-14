@@ -15,4 +15,4 @@ spec:
     grafanaStarterDashboard: assets/collector/managed-suite/grafana-dashboard.json.tftpl
   notes:
     - The CloudWatch dashboard template is runtime-generic and expects API plus Lambda identifiers as inputs.
-    - The Grafana starter dashboard is a preset artifact and should be paired with a class-specific metric catalog before broad reuse.
+    - The Grafana starter dashboard is a preset artifact and is currently supported only for the metric set governed under the serverless-api preset.

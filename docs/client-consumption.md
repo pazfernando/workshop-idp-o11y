@@ -115,6 +115,8 @@ The handoff package is also the authoritative record of the effective implementa
 
 - the effective instrumentation mode and export strategy
 - the OTLP authentication mode
+- the current metric support policy and selected dashboard preset
+- the requested and supported preset metric names
 - the effective collector endpoint and whether it came from an explicit client input or the managed suite
 - the effective OTLP endpoints returned by the adapter
 - whether EMF compatibility remained enabled

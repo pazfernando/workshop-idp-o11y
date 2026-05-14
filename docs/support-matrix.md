@@ -66,11 +66,12 @@ Additional AWS Lambda notes:
 
 | Capability | Contract | Plan | AWS Adapter Materialization | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| Dashboards | Yes | Yes | Partial | Planner resolves classes and asset references; backend rendering is not fully generalized |
+| Dashboards | Yes | Yes | Partial | Planner resolves preset classes and asset references; backend rendering is not fully generalized |
 | Alerts | Yes | Yes | Partial | Planner carries rules; generalized backend rendering is not complete |
 | SLOs | Yes | Yes | Partial | Planner carries objectives; execution backend is not generalized |
 | Data retention | Yes | Yes | Partial | Planner carries policy intent; enforcement depends on execution backend |
 | Runtime bindings | Yes | Yes | Yes for AWS Lambda | Concrete adapter output exists |
+| Governed preset metrics | Yes | Yes | Partial | Only metrics that belong to supported dashboard presets are accepted today |
 
 ## CI/CD Consumption Model
 
@@ -95,7 +96,8 @@ Before authoring a contract, check:
 
 1. whether your target and runtime combination is in the supported adapter path
 2. whether the capability you want is fully materialized or only represented at planning level
-3. whether your delivery pipeline consumes CLI output directly, the reusable workflow interface, or a remote platform API
+3. whether your requested metrics belong to a supported dashboard preset
+4. whether your delivery pipeline consumes CLI output directly, the reusable workflow interface, or a remote platform API
 
 ## Companion References
 

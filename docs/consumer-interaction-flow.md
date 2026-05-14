@@ -36,11 +36,12 @@ The AWS Lambda example in [examples/contracts/aws-lambda-order-processing.yaml](
 1. The client repository stores the contract next to its application code.
 2. The client workflow calls the platform reusable workflow.
 3. The contract requests collector-based ingestion for traces, metrics, and logs.
-4. The platform can provision the managed suite if the client wants platform-owned collector routing.
-5. The planner resolves the AWS Lambda bindings class, collector class, and relevant assets.
-6. The AWS adapter produces Lambda-ready bindings.
-7. The client receives `plan.json`, `bindings.json`, and the final `o11y-client-handoff` artifact.
-8. The handoff package records the effective export strategy, endpoint source, EMF mode, adapter notes, required follow-up inputs, and produced artifacts so the client deployer knows exactly how observability was materialized.
+4. The contract metric catalog is validated against the selected supported dashboard preset.
+5. The platform can provision the managed suite if the client wants platform-owned collector routing.
+6. The planner resolves the AWS Lambda bindings class, collector class, relevant assets, and preset metric support metadata.
+7. The AWS adapter produces Lambda-ready bindings.
+8. The client receives `plan.json`, `bindings.json`, and the final `o11y-client-handoff` artifact.
+9. The handoff package records the effective export strategy, endpoint source, metric support policy, requested preset metrics, adapter notes, required follow-up inputs, and produced artifacts so the client deployer knows exactly how observability was materialized.
 
 ## Workflow-First Consumption
 

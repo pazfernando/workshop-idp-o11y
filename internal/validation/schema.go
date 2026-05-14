@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
+	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -75,6 +76,14 @@ func validateSemantics(contract *v1alpha1.ObservabilityContract) error {
 		return fmt.Errorf("metrics catalog must not be empty when metrics are enabled")
 	}
 
+	if err := validateDashboardPreset(contract); err != nil {
+		return err
+	}
+
+	if err := validateMetricsAgainstPreset(contract); err != nil {
+		return err
+	}
+
 	if err := validateSignalSpec("traces", contract.Spec.Telemetry.Signals.Traces.Enabled, contract.Spec.Telemetry.Signals.Traces.BackendClass, contract.Spec.Telemetry.Signals.Traces.Ingestion); err != nil {
 		return err
 	}
@@ -138,6 +147,53 @@ func validateUniformIngestionForAWSLambda(contract *v1alpha1.ObservabilityContra
 		if ingestion != expected {
 			return fmt.Errorf("aws-lambda bindings require one ingestion mode across all enabled signals; mixed direct and collector signal ingestion is not supported")
 		}
+	}
+
+	return nil
+}
+
+func validateMetricsAgainstPreset(contract *v1alpha1.ObservabilityContract) error {
+	if !contract.Spec.Telemetry.Signals.Metrics.Enabled {
+		return nil
+	}
+
+	if contract.Spec.Capabilities.Dashboards == nil || !contract.Spec.Capabilities.Dashboards.Enabled || strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset) == "" {
+		return fmt.Errorf("metrics support currently requires capabilities.dashboards.enabled=true with a supported preset")
+	}
+
+	preset := strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset)
+	supportedMetrics, _ := metricspreset.SupportedMetrics(preset)
+
+	supported := map[string]struct{}{}
+	for _, metric := range supportedMetrics {
+		supported[metric] = struct{}{}
+	}
+
+	unsupported := []string{}
+	for _, metric := range contract.Spec.Telemetry.Signals.Metrics.Catalog {
+		if _, ok := supported[metric.Name]; !ok {
+			unsupported = append(unsupported, metric.Name)
+		}
+	}
+
+	if len(unsupported) > 0 {
+		return fmt.Errorf("metrics catalog contains metrics outside preset %q support: %s", preset, strings.Join(unsupported, ", "))
+	}
+
+	return nil
+}
+
+func validateDashboardPreset(contract *v1alpha1.ObservabilityContract) error {
+	if contract.Spec.Capabilities.Dashboards == nil || !contract.Spec.Capabilities.Dashboards.Enabled {
+		return nil
+	}
+
+	preset := strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset)
+	if preset == "" {
+		return fmt.Errorf("capabilities.dashboards.preset is required when dashboards are enabled")
+	}
+	if _, ok := metricspreset.Lookup(preset); !ok {
+		return fmt.Errorf("dashboard preset %q is not supported; supported presets: %s", preset, strings.Join(metricspreset.KnownPresets(), ", "))
 	}
 
 	return nil

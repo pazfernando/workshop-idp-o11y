@@ -171,6 +171,11 @@ Guidance:
 
 This is one of the most important sections for self-service adoption.
 
+Current product rule:
+
+- only metrics that belong to the selected supported dashboard preset are accepted today
+- the metrics catalog is not currently a free-form production extension surface
+
 Each metric should define:
 
 - `name`
@@ -214,6 +219,8 @@ Important validation rules enforced today:
 - when metrics are enabled, `metrics.catalog` must not be empty
 - when a signal is enabled, `ingestion` and `backendClass` must both be set
 - AWS Lambda contracts cannot mix `collector` and `direct` ingestion across enabled signals
+- when metrics are enabled, `capabilities.dashboards.enabled` must be `true` with a supported preset
+- every metric in `metrics.catalog` must belong to the selected preset-supported metric set
 
 ## Contract Versus Runtime Bindings
 
@@ -239,7 +246,7 @@ Clients should treat these contract fields as effective today in validation, pla
 - `spec.telemetry.signals.*.enabled`
 - `spec.telemetry.signals.*.ingestion`
 - `spec.telemetry.signals.*.backendClass`
-- `spec.telemetry.signals.metrics.catalog`
+- `spec.telemetry.signals.metrics.catalog` when entries belong to the selected supported preset
 - `spec.capabilities.*` as planning intent
 
 Clients should treat these as valid model fields that are currently more declarative than operational in this repository:
@@ -263,6 +270,8 @@ Clients should treat these as valid model fields that are currently more declara
 
 - Omitting `delivery.region` for AWS workloads.
 - Enabling metrics without defining a catalog.
+- Defining metrics outside the selected preset-supported metric set.
+- Enabling metrics without a supported dashboard preset.
 - Enabling a signal without setting both `ingestion` and `backendClass`.
 - Mixing `collector` and `direct` ingestion in AWS Lambda contracts and expecting separate per-signal runtime export paths.
 - Treating `backendClass` as a vendor-specific implementation field.
@@ -292,5 +301,6 @@ go run ./cmd/o11yctl bindings aws-lambda -f examples/contracts/aws-lambda-order-
 ## Companion References
 
 - [observability-contract.md](observability-contract.md)
+- [metrics-governance.md](metrics-governance.md)
 - [support-matrix.md](support-matrix.md)
 - [consumer-interaction-flow.md](consumer-interaction-flow.md)

@@ -497,6 +497,24 @@ jobs:
               "emfCompatibilityMode": os.environ["EMF_COMPATIBILITY_MODE_INPUT"] == "true",
               "metricExportIntervalMs": int(os.environ["METRIC_EXPORT_INTERVAL_MS_INPUT"]),
           }
+          metric_coverage = {
+              "supportPolicy": "unknown",
+              "dashboardPreset": "",
+              "requestedMetricNames": [],
+              "supportedMetricNames": [],
+          }
+
+          plan = json.loads((generated_dir / "plan.json").read_text())
+          for capability in plan.get("capabilities", []):
+              if capability.get("name") == "metrics-pipeline":
+                  properties = capability.get("properties", {})
+                  metric_coverage.update({
+                      "supportPolicy": properties.get("metricSupportPolicy", "unknown"),
+                      "dashboardPreset": properties.get("dashboardPreset", ""),
+                      "requestedMetricNames": properties.get("metricNames", []),
+                      "supportedMetricNames": properties.get("supportedMetricNames", []),
+                  })
+                  break
 
           if bindings_present:
               bindings = json.loads((generated_dir / "bindings.json").read_text())
@@ -559,6 +577,7 @@ jobs:
                   "collector": collector_inputs,
                   "direct": direct_inputs,
               },
+              "metricCoverage": metric_coverage,
               "artifactsProduced": artifact_files,
           }
 
@@ -596,10 +615,24 @@ jobs:
               f"- Managed suite Grafana URL: `{manifest['managedSuite']['grafanaUrl']}`",
               f"- Managed suite OTLP HTTP endpoint: `{manifest['managedSuite']['otlpHttpEndpoint']}`",
               "",
-              "## Delivered Files",
+              "## Metric Coverage",
               "",
+              f"- Metric support policy: `{metric_coverage['supportPolicy']}`",
+              f"- Dashboard preset: `{metric_coverage['dashboardPreset']}`",
           ]
 
+          summary_lines.extend([f"- Requested metric: `{name}`" for name in metric_coverage["requestedMetricNames"]])
+          if not metric_coverage["requestedMetricNames"]:
+              summary_lines.append("- Requested metric: `none`")
+          summary_lines.extend([f"- Supported preset metric: `{name}`" for name in metric_coverage["supportedMetricNames"]])
+          if not metric_coverage["supportedMetricNames"]:
+              summary_lines.append("- Supported preset metric: `none`")
+
+          summary_lines.extend([
+              "",
+              "## Delivered Files",
+              "",
+          ])
           summary_lines.extend([f"- `{name}`" for name in artifact_files])
           summary_lines.extend([
               "",

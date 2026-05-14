@@ -44,6 +44,47 @@ func TestValidateContractRejectsMixedIngestionForAWSLambda(t *testing.T) {
 	}
 }
 
+func TestValidateContractRejectsMetricsOutsidePresetSupport(t *testing.T) {
+	t.Parallel()
+
+	contract := validContract()
+	contract.Spec.Telemetry.Signals.Metrics.Catalog = append(contract.Spec.Telemetry.Signals.Metrics.Catalog, v1alpha1.MetricSpec{
+		Name:        "UnexpectedMetric",
+		Type:        "counter",
+		Unit:        "1",
+		Description: "Unsupported metric",
+	})
+
+	err := ValidateContract(contract)
+	if err == nil || !strings.Contains(err.Error(), "outside preset") {
+		t.Fatalf("expected preset metric support error, got %v", err)
+	}
+}
+
+func TestValidateContractRejectsMetricsWithoutDashboardPreset(t *testing.T) {
+	t.Parallel()
+
+	contract := validContract()
+	contract.Spec.Capabilities.Dashboards = nil
+
+	err := ValidateContract(contract)
+	if err == nil || !strings.Contains(err.Error(), "requires capabilities.dashboards.enabled=true with a supported preset") {
+		t.Fatalf("expected dashboard preset requirement error, got %v", err)
+	}
+}
+
+func TestValidateContractRejectsUnknownDashboardPreset(t *testing.T) {
+	t.Parallel()
+
+	contract := validContract()
+	contract.Spec.Capabilities.Dashboards.Preset = "unknown-preset"
+
+	err := ValidateContract(contract)
+	if err == nil || !strings.Contains(err.Error(), "dashboard preset") {
+		t.Fatalf("expected dashboard preset error, got %v", err)
+	}
+}
+
 func validContract() *v1alpha1.ObservabilityContract {
 	return &v1alpha1.ObservabilityContract{
 		APIVersion: "observability.platform/v1alpha1",
@@ -91,10 +132,16 @@ func validContract() *v1alpha1.ObservabilityContract {
 						},
 						Catalog: []v1alpha1.MetricSpec{
 							{
-								Name:        "orders_created_total",
+								Name:        "OrdersCreated",
 								Type:        "counter",
-								Unit:        "1",
+								Unit:        "{order}",
 								Description: "Number of created orders",
+							},
+							{
+								Name:        "CreateOrderLatencyMs",
+								Type:        "histogram",
+								Unit:        "ms",
+								Description: "Latency for order creation",
 							},
 						},
 					},
@@ -111,7 +158,7 @@ func validContract() *v1alpha1.ObservabilityContract {
 			Capabilities: v1alpha1.Capabilities{
 				Dashboards: &v1alpha1.DashboardCapability{
 					Enabled: true,
-					Preset:  "api-workload",
+					Preset:  "serverless-api",
 				},
 			},
 		},

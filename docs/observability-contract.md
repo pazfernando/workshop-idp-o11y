@@ -89,7 +89,7 @@ Effective in validation, planning, or AWS Lambda bindings today:
 - enabled signals
 - signal ingestion mode
 - signal backend classes
-- metrics catalog
+- metrics catalog entries that belong to a supported dashboard preset
 - dashboards, alerts, SLO, and retention intent at planning level
 
 Currently more declarative than operational in this repository:
@@ -102,10 +102,16 @@ Currently more declarative than operational in this repository:
 
 These fields are still valid parts of the product model, but clients should not assume every one of them changes target adapter behavior today.
 
+Current product boundary for metrics:
+
+- the repository currently supports only metrics that belong to a supported dashboard preset
+- free-form client-authored metrics outside those preset catalogs are not supported in the standard product path
+
 ## What Application Teams Should Read Next
 
 For self-service contract authoring, the contract definition alone is not enough. Use these companion documents:
 
 - [contract-authoring-guide.md](contract-authoring-guide.md)
+- [metrics-governance.md](metrics-governance.md)
 - [support-matrix.md](support-matrix.md)
 - [consumer-interaction-flow.md](consumer-interaction-flow.md)

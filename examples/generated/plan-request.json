@@ -44,10 +44,16 @@
             "ingestion": "collector",
             "catalog": [
               {
-                "name": "orders_created_total",
+                "name": "OrdersCreated",
                 "type": "counter",
-                "unit": "1",
+                "unit": "{order}",
                 "description": "Number of created orders"
+              },
+              {
+                "name": "CreateOrderLatencyMs",
+                "type": "histogram",
+                "unit": "ms",
+                "description": "Latency of order creation"
               }
             ]
           },
@@ -62,7 +68,7 @@
       "capabilities": {
         "dashboards": {
           "enabled": true,
-          "preset": "api-workload"
+          "preset": "serverless-api"
         }
       }
     }

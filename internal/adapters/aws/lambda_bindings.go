@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
+	"github.com/example/workshop-iidp-o11y/internal/metricspreset"
 	"github.com/example/workshop-iidp-o11y/internal/planner"
 )
 
@@ -146,6 +147,13 @@ func BuildLambdaBindings(contract *v1alpha1.ObservabilityContract, opts LambdaBi
 			notes = append(notes, "Direct AWS export uses SigV4-authenticated OTLP endpoints for X-Ray and CloudWatch metrics.")
 		} else {
 			notes = append(notes, "Direct mode without inferred AWS endpoints requires platform-supplied OTLP endpoints.")
+		}
+	}
+
+	if contract.Spec.Telemetry.Signals.Metrics.Enabled && contract.Spec.Capabilities.Dashboards != nil {
+		preset := strings.TrimSpace(contract.Spec.Capabilities.Dashboards.Preset)
+		if supportedMetrics, ok := metricspreset.SupportedMetrics(preset); ok {
+			notes = append(notes, fmt.Sprintf("Current metric support is limited to dashboard preset %q metrics: %s.", preset, strings.Join(supportedMetrics, ", ")))
 		}
 	}
 

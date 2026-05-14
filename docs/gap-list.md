@@ -22,13 +22,20 @@ This document captures the remaining product gaps after the current repository i
 - Their backend execution is still less generalized than AWS Lambda runtime bindings.
 - The repository still needs a broader adapter execution story beyond asset references and planning metadata.
 
-## 3. Expanded Target Coverage
+## 3. Governed Metric Catalog
+
+- Metrics are still modeled as client-authored entries inside `metrics.catalog`.
+- The repository does not yet enforce a platform-owned governed metric catalog with stable metric IDs and adapter coverage metadata.
+- Dashboard presets are not yet explicitly tied to approved metric coverage definitions.
+- There is no productized proposal or approval workflow for new metrics.
+
+## 4. Expanded Target Coverage
 
 - AWS Lambda is still the only target with concrete runtime adapter output.
 - Kubernetes and hybrid targets still stop at validation and planning.
 - The platform still needs additional target adapters if it wants uniform multi-runtime execution.
 
-## 4. Control-Plane Hardening
+## 5. Control-Plane Hardening
 
 - There is no gRPC surface yet.
 - There is no authentication, authorization, or tenancy layer in `o11yd`.
@@ -37,7 +44,8 @@ This document captures the remaining product gaps after the current repository i
 ## Recommended Execution Order
 
 1. harden the reusable workflow interface, client output contract, and workflow-based platform semantics
-2. harden persistent execution semantics and platform-owned state
-3. generalize capability execution beyond planning metadata
-4. expand target adapter coverage beyond AWS Lambda
-5. harden the remote control plane with auth, tenancy, and asynchronous operations only if that interface becomes a primary product path
+2. harden governed metric catalog semantics, dashboard coverage, and client-facing observability contracts
+3. harden persistent execution semantics and platform-owned state
+4. generalize capability execution beyond planning metadata
+5. expand target adapter coverage beyond AWS Lambda
+6. harden the remote control plane with auth, tenancy, and asynchronous operations only if that interface becomes a primary product path

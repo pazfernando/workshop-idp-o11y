@@ -40,6 +40,7 @@ go run ./cmd/o11yd -listen :8080
 - Product operating model: [docs/operating-model.md](docs/operating-model.md)
 - Platform consumer flow: [docs/consumer-interaction-flow.md](docs/consumer-interaction-flow.md)
 - Client consumption guide: [docs/client-consumption.md](docs/client-consumption.md)
+- Metrics governance: [docs/metrics-governance.md](docs/metrics-governance.md)
 - Observability contract: [docs/observability-contract.md](docs/observability-contract.md)
 - Contract authoring guide: [docs/contract-authoring-guide.md](docs/contract-authoring-guide.md)
 - Control-plane API: [docs/control-plane-api.md](docs/control-plane-api.md)
