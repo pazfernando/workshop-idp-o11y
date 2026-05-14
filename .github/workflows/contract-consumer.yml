@@ -150,7 +150,7 @@ on:
         description: Effective collector endpoint used for bindings generation.
         value: ${{ jobs.contract.outputs.effective_collector_endpoint }}
       effective_collector_source:
-        description: Source of the effective collector endpoint: explicit, managed_suite, or none.
+        description: "Source of the effective collector endpoint: explicit, managed_suite, or none."
         value: ${{ jobs.contract.outputs.effective_collector_source }}
 
 jobs:
