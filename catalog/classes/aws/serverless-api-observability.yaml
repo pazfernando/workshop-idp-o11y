@@ -12,8 +12,7 @@ spec:
       - serverless-api
       - serverless-api-async-workflow
   templates:
-    cloudwatchDashboard: assets/dashboards/cloudwatch/aws-lambda-api-workload.json.tftpl
     grafanaStarterDashboard: assets/collector/managed-suite/grafana-dashboard.json.tftpl
   notes:
-    - The CloudWatch dashboard template is runtime-generic and expects API plus Lambda identifiers as inputs.
-    - The Grafana starter dashboard is a preset artifact and supports both `serverless-api` and `serverless-api-async-workflow`.
+    - The Grafana starter dashboard is the platform-owned workload dashboard artifact for both `serverless-api` and `serverless-api-async-workflow`.
+    - AWS runtime metrics such as Lambda invocations, duration, and CloudWatch Logs remain backend concerns rather than caller-owned dashboard resources.

@@ -1,4 +1,4 @@
-# workshop-iidp-o11y
+# workshop-idp-o11y
 
 Platform engineering product for contract-driven observability across multiple workloads, runtimes, and delivery targets.
 

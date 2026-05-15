@@ -4,8 +4,6 @@ This example shows how a client repository can consume the platform product thro
 
 ## Files
 
-- workflow example:
-  `.github/workflows/consume-observability-platform.yml`
 - contract example:
   `../../contracts/aws-lambda-order-processing.yaml`
 - Terraform example for local binding consumption:
@@ -26,7 +24,7 @@ The example workflow:
 
 Before using this workflow in a real repository, replace:
 
-- `your-org/workshop-iidp-o11y` with the actual platform repository
+- `your-org/workshop-idp-o11y` with the actual platform repository
 - `contract_path` with the path of the contract inside the client repository
 - CIDR inputs with the ranges appropriate for the client environment
 - the placeholder deployment step with the real deployment logic that consumes `bindings.json`

@@ -42,7 +42,7 @@ on:
 
 jobs:
   observability:
-    uses: your-org/workshop-iidp-o11y/.github/workflows/contract-consumer.yml@main
+    uses: your-org/workshop-idp-o11y/.github/workflows/contract-consumer.yml@main
     with:
       contract_path: contracts/observability/order-processing.yaml
       generate_bindings: true
@@ -64,7 +64,7 @@ on:
 
 jobs:
   observability:
-    uses: your-org/workshop-iidp-o11y/.github/workflows/contract-consumer.yml@main
+    uses: your-org/workshop-idp-o11y/.github/workflows/contract-consumer.yml@main
     with:
       contract_path: contracts/observability/order-processing.yaml
       generate_bindings: true
@@ -189,7 +189,7 @@ Replace those local steps with one reusable job:
 ```yaml
 jobs:
   observability:
-    uses: your-org/workshop-iidp-o11y/.github/workflows/contract-consumer.yml@main
+    uses: your-org/workshop-idp-o11y/.github/workflows/contract-consumer.yml@main
     with:
       contract_path: contracts/observability/order-processing.yaml
       generate_bindings: true
@@ -205,7 +205,7 @@ This is the clearest switch point for clients:
 3. replace local `o11yctl` commands with the reusable workflow call
 4. consume workflow outputs or artifacts in downstream deployment jobs
 
-For a concrete reference, see [examples/consumers/aws-lambda-order-processing/.github/workflows/consume-observability-platform.yml](../examples/consumers/aws-lambda-order-processing/.github/workflows/consume-observability-platform.yml).
+For a concrete reference, see [examples/consumers/aws-lambda-order-processing/README.md](../examples/consumers/aws-lambda-order-processing/README.md).
 
 ## How The Client Uses The Outputs
 
@@ -216,7 +216,7 @@ Example:
 ```yaml
 jobs:
   observability:
-    uses: your-org/workshop-iidp-o11y/.github/workflows/contract-consumer.yml@main
+    uses: your-org/workshop-idp-o11y/.github/workflows/contract-consumer.yml@main
     with:
       contract_path: contracts/observability/order-processing.yaml
       generate_bindings: true

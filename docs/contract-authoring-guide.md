@@ -54,10 +54,10 @@ spec:
         ingestion: collector
         backendClass: metrics-standard
         catalog:
-          - name: HttpRequests
+          - name: HttpServerRequestCount
             type: counter
             unit: "{request}"
-            description: Total HTTP requests.
+            description: Total HTTP requests handled by the workload.
       logs:
         enabled: true
         ingestion: collector
