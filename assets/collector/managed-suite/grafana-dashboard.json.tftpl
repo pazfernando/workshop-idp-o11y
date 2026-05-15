@@ -6,6 +6,27 @@
   "refresh": "30s",
   "timezone": "browser",
   "tags": ["workshop", "otel", "grafana", "alloy", "serverless-api"],
+  "templating": {
+    "list": [
+      {
+        "name": "lambda_function",
+        "type": "query",
+        "label": "Lambda Function",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\"}, aws_lambda_function_name)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 1,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -16,7 +37,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "requests/sec"
         }
       ]
@@ -30,7 +51,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "errors/sec"
         }
       ]
@@ -44,17 +65,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum(rate({__name__=~\"HttpServerRequestDuration_milliseconds_sum|http_server_request_duration_milliseconds_sum|HttpServerRequestDuration_sum|http_server_request_duration_sum\"}[$__rate_interval])) / sum(rate({__name__=~\"HttpServerRequestDuration_milliseconds_count|http_server_request_duration_milliseconds_count|HttpServerRequestDuration_count|http_server_request_duration_count\"}[$__rate_interval]))) or vector(0)",
+          "expr": "(sum(rate({__name__=~\"HttpServerRequestDuration_milliseconds_sum|http_server_request_duration_milliseconds_sum|HttpServerRequestDuration_sum|http_server_request_duration_sum\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval])) / sum(rate({__name__=~\"HttpServerRequestDuration_milliseconds_count|http_server_request_duration_milliseconds_count|HttpServerRequestDuration_count|http_server_request_duration_count\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval]))) or vector(0)",
           "legendFormat": "avg"
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__rate_interval]))) or vector(0)",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval]))) or vector(0)",
           "legendFormat": "p95"
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__rate_interval]))) or vector(0)",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\",aws_lambda_function_name=~\"$lambda_function\"}[$__rate_interval]))) or vector(0)",
           "legendFormat": "p99"
         }
       ]
@@ -68,7 +89,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\"}[$__range])) or vector(0)",
+          "expr": "sum(increase({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__range])) or vector(0)",
           "instant": true
         }
       ],
@@ -94,7 +115,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\"}[$__range])) or vector(0)",
+          "expr": "sum(increase({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__range])) or vector(0)",
           "instant": true
         }
       ],
@@ -120,7 +141,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum(increase({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\"}[$__range])) / clamp_min(sum(increase({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\"}[$__range])), 1)) * 100",
+          "expr": "(sum(increase({__name__=~\"HttpServerRequestErrors_total|http_server_request_errors_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__range])) / clamp_min(sum(increase({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\",aws_lambda_function_name=~\"$lambda_function\"}[$__range])), 1)) * 100",
           "instant": true
         }
       ],
@@ -146,7 +167,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (increase({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__range]))) or vector(0)",
+          "expr": "histogram_quantile(0.95, sum by (le) (increase({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\",aws_lambda_function_name=~\"$lambda_function\"}[$__range]))) or vector(0)",
           "instant": true
         }
       ],
@@ -172,7 +193,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le) (increase({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\"}[$__range]))) or vector(0)",
+          "expr": "histogram_quantile(0.99, sum by (le) (increase({__name__=~\"HttpServerRequestDuration_milliseconds_bucket|http_server_request_duration_milliseconds_bucket|HttpServerRequestDuration_bucket|http_server_request_duration_bucket\",aws_lambda_function_name=~\"$lambda_function\"}[$__range]))) or vector(0)",
           "instant": true
         }
       ],
@@ -190,6 +211,5 @@
       }
     }
   ],
-  "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" }
 }
