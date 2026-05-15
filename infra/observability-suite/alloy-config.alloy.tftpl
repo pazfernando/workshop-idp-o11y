@@ -16,7 +16,7 @@ otelcol.receiver.otlp "workshop" {
 
 otelcol.processor.batch "metrics" {
   output {
-    metrics = [otelcol.exporter.prometheus.workshop.input, otelcol.exporter.debug.metrics.input]
+    metrics = [otelcol.exporter.prometheus.workshop.input]
   }
 }
 
@@ -37,10 +37,6 @@ otelcol.exporter.prometheus "workshop" {
   add_metric_suffixes             = true
   include_scope_labels            = true
   resource_to_telemetry_conversion = true
-}
-
-otelcol.exporter.debug "metrics" {
-  verbosity = "detailed"
 }
 
 prometheus.remote_write "local" {
