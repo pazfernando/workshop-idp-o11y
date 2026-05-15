@@ -1,0 +1,16 @@
+name: serverless-api-async-workflow
+displayName: Serverless API And Async Workflow
+description: Standard workload metrics for serverless APIs that also include async worker functions.
+contractMetrics:
+  - HttpServerRequestCount
+  - HttpServerRequestDuration
+  - HttpServerRequestErrors
+  - AsyncOperationCount
+  - AsyncOperationDuration
+  - AsyncOperationErrors
+recommendedRuntimeMetrics:
+  - aws.lambda.invocations
+  - aws.lambda.errors
+  - aws.lambda.duration
+  - aws.lambda.throttles
+  - aws.lambda.concurrent_executions

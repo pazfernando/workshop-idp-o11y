@@ -5,7 +5,7 @@
   "version": 1,
   "refresh": "30s",
   "timezone": "browser",
-  "tags": ["workshop", "otel", "grafana", "alloy", "serverless-api"],
+  "tags": ["workshop", "otel", "grafana", "alloy", "serverless-api", "serverless-api-async-workflow"],
   "templating": {
     "list": [
       {
@@ -13,7 +13,24 @@
         "type": "query",
         "label": "Lambda Function",
         "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total\"}, aws_lambda_function_name)",
+        "query": "label_values({__name__=~\"HttpServerRequestCount_total|http_server_request_count_total|AsyncOperationCount_total|async_operation_count_total\"}, aws_lambda_function_name)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 1,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        }
+      },
+      {
+        "name": "operation",
+        "type": "query",
+        "label": "Operation",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values({__name__=~\"AsyncOperationCount_total|async_operation_count_total\",aws_lambda_function_name=~\"$lambda_function\"}, app_operation)",
         "includeAll": true,
         "allValue": ".*",
         "multi": false,
@@ -199,6 +216,105 @@
       ],
       "fieldConfig": {
         "defaults": { "unit": "ms", "decimals": 2 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Async Operation Volume",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (aws_lambda_function_name, app_operation) (rate({__name__=~\"AsyncOperationCount_total|async_operation_count_total\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "{{aws_lambda_function_name}} {{app_operation}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Async Operation Errors",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (aws_lambda_function_name, app_operation) (rate({__name__=~\"AsyncOperationErrors_total|async_operation_errors_total\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "{{aws_lambda_function_name}} {{app_operation}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Async Operation Latency",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, aws_lambda_function_name, app_operation) (rate({__name__=~\"AsyncOperationDuration_milliseconds_bucket|async_operation_duration_milliseconds_bucket|AsyncOperationDuration_bucket|async_operation_duration_bucket\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "{{aws_lambda_function_name}} {{app_operation}} p95"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum by (aws_lambda_function_name, app_operation) (rate({__name__=~\"AsyncOperationDuration_milliseconds_sum|async_operation_duration_milliseconds_sum|AsyncOperationDuration_sum|async_operation_duration_sum\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__rate_interval])) / clamp_min(sum by (aws_lambda_function_name, app_operation) (rate({__name__=~\"AsyncOperationDuration_milliseconds_count|async_operation_duration_milliseconds_count|AsyncOperationDuration_count|async_operation_duration_count\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__rate_interval])), 1)) or vector(0)",
+          "legendFormat": "{{aws_lambda_function_name}} {{app_operation}} avg"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Async Operations",
+      "gridPos": { "h": 4, "w": 8, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase({__name__=~\"AsyncOperationCount_total|async_operation_count_total\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__range])) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Async Errors",
+      "gridPos": { "h": 4, "w": 6, "x": 20, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase({__name__=~\"AsyncOperationErrors_total|async_operation_errors_total\",aws_lambda_function_name=~\"$lambda_function\",app_operation=~\"$operation\"}[$__range])) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 },
         "overrides": []
       },
       "options": {
