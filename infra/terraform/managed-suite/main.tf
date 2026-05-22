@@ -4,12 +4,21 @@ provider "aws" {
 
 data "aws_subnets" "public" {
   filter {
+    name   = "vpc-id"
+    values = [var.vpc_id]
+  }
+  filter {
     name   = "map-public-ip-on-launch"
     values = ["true"]
   }
 }
 
-data "aws_subnets" "all" {}
+data "aws_subnets" "all" {
+  filter {
+    name   = "vpc-id"
+    values = [var.vpc_id]
+  }
+}
 
 locals {
   selected_subnet_id = trim(var.subnet_id, " ") != "" ? trim(var.subnet_id, " ") : (
@@ -96,7 +105,7 @@ locals {
 resource "aws_security_group" "managed_suite" {
   name        = "${var.name}-sg"
   description = "Security group for the platform-managed observability suite."
-  vpc_id      = data.aws_subnet.selected[0].vpc_id
+  vpc_id      = var.vpc_id
 
   egress {
     from_port   = 0

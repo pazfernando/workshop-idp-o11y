@@ -10,6 +10,12 @@ variable "name" {
   default     = "o11y-platform"
 }
 
+variable "vpc_id" {
+  description = "VPC ID where the managed observability suite will be deployed."
+  type        = string
+  default     = "vpc-095bf825560175dae"
+}
+
 variable "subnet_id" {
   description = "Optional subnet ID. If empty, Terraform selects the first public subnet, or the first subnet if no public subnet exists."
   type        = string
