@@ -143,15 +143,15 @@ func signalCapabilities(contract *v1alpha1.ObservabilityContract) []CapabilityPl
 			BackendClass: contract.Spec.Telemetry.Signals.Metrics.BackendClass,
 			Intent:       describeSignalIntent(contract.Spec.Delivery.Target, "metrics"),
 			Properties: map[string]any{
-				"signal":                "metrics",
-				"ingestion":             contract.Spec.Telemetry.Signals.Metrics.Ingestion,
-				"metricCount":           len(contract.Spec.Telemetry.Signals.Metrics.Catalog),
-				"metricNames":           metricNames(contract.Spec.Telemetry.Signals.Metrics.Catalog),
-				"dashboardPreset":       dashboardPreset,
-				"supportedMetricNames":  supportedMetrics,
+				"signal":                    "metrics",
+				"ingestion":                 contract.Spec.Telemetry.Signals.Metrics.Ingestion,
+				"metricCount":               len(contract.Spec.Telemetry.Signals.Metrics.Catalog),
+				"metricNames":               metricNames(contract.Spec.Telemetry.Signals.Metrics.Catalog),
+				"dashboardPreset":           dashboardPreset,
+				"supportedMetricNames":      supportedMetrics,
 				"recommendedRuntimeMetrics": recommendedRuntimeMetrics,
-				"metricSupportPolicy":   "preset-only",
-				"monitoredSLO":          contract.Spec.Capabilities.SLOs != nil && contract.Spec.Capabilities.SLOs.Enabled,
+				"metricSupportPolicy":       "preset-only",
+				"monitoredSLO":              contract.Spec.Capabilities.SLOs != nil && contract.Spec.Capabilities.SLOs.Enabled,
 			},
 		})
 	}
@@ -334,15 +334,33 @@ func classPlans(contract *v1alpha1.ObservabilityContract) []ClassPlan {
 	}
 
 	if contract.Spec.Capabilities.Dashboards != nil && contract.Spec.Capabilities.Dashboards.Enabled && contract.Spec.Delivery.Target == "aws" {
-		classes = append(classes, ClassPlan{
+		if dashboardClass, ok := awsDashboardClassForPreset(contract.Spec.Capabilities.Dashboards.Preset); ok {
+			classes = append(classes, dashboardClass)
+		}
+	}
+
+	return classes
+}
+
+func awsDashboardClassForPreset(preset string) (ClassPlan, bool) {
+	switch preset {
+	case "serverless-api", "serverless-api-async-workflow":
+		return ClassPlan{
 			Name:    "aws-serverless-api-observability",
 			Layer:   "catalog",
 			Path:    "catalog/classes/aws/serverless-api-observability.yaml",
 			Purpose: "AWS class that fulfills the neutral serverless-api dashboard preset for Lambda and API Gateway workloads.",
-		})
+		}, true
+	case "monolith-business-app":
+		return ClassPlan{
+			Name:    "aws-monolith-business-app-observability",
+			Layer:   "catalog",
+			Path:    "catalog/classes/aws/monolith-business-app-observability.yaml",
+			Purpose: "AWS class that fulfills the neutral monolith-business-app dashboard preset for JVM HTTP monolith workloads.",
+		}, true
+	default:
+		return ClassPlan{}, false
 	}
-
-	return classes
 }
 
 func artifactPlans(contract *v1alpha1.ObservabilityContract) []ArtifactPlan {

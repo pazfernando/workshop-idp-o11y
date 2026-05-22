@@ -1,11 +1,13 @@
 name: monolith-business-app
 displayName: Monolith Business Application
-description: Standard workload metrics for monolithic application services.
+description: Standard OpenTelemetry JVM and HTTP metrics for monolithic application services.
 contractMetrics:
-  - ApplicationOperationCount
-  - ApplicationOperationDuration
-  - ApplicationOperationErrors
+  - http.server.request.duration
+  - http.client.request.duration
 recommendedRuntimeMetrics:
-  - process.cpu.utilization
-  - process.memory.usage
-  - process.thread.count
+  - jvm.memory.used
+  - jvm.memory.limit
+  - jvm.cpu.time
+  - jvm.cpu.count
+  - jvm.cpu.recent_utilization
+  - jvm.class.count

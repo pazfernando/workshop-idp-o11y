@@ -1,0 +1,196 @@
+{
+  "uid": "${dashboard_uid}",
+  "title": "${dashboard_title}",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["workshop", "otel", "grafana", "alloy", "monolith-business-app", "jvm"],
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "type": "query",
+        "label": "HTTP Route",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_seconds_count|http_server_duration_count\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}, http_route)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 1,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": ".*" }
+      },
+      {
+        "name": "method",
+        "type": "query",
+        "label": "HTTP Method",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_seconds_count|http_server_duration_count\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}, http_request_method)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 1,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": ".*" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP Server Request Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_seconds_count|http_server_duration_count\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\",http_route=~\"$route\",http_request_method=~\"$method\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "requests/sec"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP Server Error Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_seconds_count|http_server_duration_count\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\",http_route=~\"$route\",http_request_method=~\"$method\",http_response_status_code=~\"5..\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "5xx/sec"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP Server Latency",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\",http_route=~\"$route\",http_request_method=~\"$method\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate({__name__=~\"http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\",http_route=~\"$route\",http_request_method=~\"$method\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP Client Latency",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate({__name__=~\"http_client_request_duration_seconds_bucket|http_client_request_duration_bucket|http_client_duration_seconds_bucket|http_client_duration_bucket\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "{{server_address}} p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, server_address) (rate({__name__=~\"http_client_request_duration_seconds_bucket|http_client_request_duration_bucket|http_client_duration_seconds_bucket|http_client_duration_bucket\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}[$__rate_interval]))) or vector(0)",
+          "legendFormat": "{{server_address}} p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "JVM CPU",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg({__name__=~\"jvm_cpu_recent_utilization|jvm_cpu_recent_utilization_ratio\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}) or vector(0)",
+          "legendFormat": "recent utilization"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate({__name__=~\"jvm_cpu_time_seconds_total|jvm_cpu_time_total|jvm_cpu_time_seconds|jvm_cpu_time\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "cpu seconds/sec"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "JVM Memory",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (jvm_memory_type) ({__name__=~\"jvm_memory_used_bytes|jvm_memory_used\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}) or vector(0)",
+          "legendFormat": "{{jvm_memory_type}} used"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (jvm_memory_type) ({__name__=~\"jvm_memory_limit_bytes|jvm_memory_limit\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}) or vector(0)",
+          "legendFormat": "{{jvm_memory_type}} limit"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Loaded Classes",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum({__name__=~\"jvm_class_count|jvm_class_count_total\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "CPU Count",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max({__name__=~\"jvm_cpu_count|jvm_cpu_count_total\",service_name=\"${service_name}\",service_namespace=\"${service_namespace}\",deployment_environment=\"${deployment_environment}\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    }
+  ],
+  "time": { "from": "now-6h", "to": "now" }
+}

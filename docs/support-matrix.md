@@ -66,7 +66,7 @@ Additional AWS Lambda notes:
 
 | Capability | Contract | Plan | AWS Adapter Materialization | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| Dashboards | Yes | Yes | Partial | Planner resolves preset classes and asset references; backend rendering is not fully generalized |
+| Dashboards | Yes | Yes | Partial | Planner resolves preset classes and asset references; Grafana publication is implemented for serverless API and monolith business app presets in the managed suite |
 | Alerts | Yes | Yes | Partial | Planner carries rules; generalized backend rendering is not complete |
 | SLOs | Yes | Yes | Partial | Planner carries objectives; execution backend is not generalized |
 | Data retention | Yes | Yes | Partial | Planner carries policy intent; enforcement depends on execution backend |

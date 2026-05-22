@@ -43,21 +43,16 @@ spec:
         ingestion: collector
         backendClass: metrics-standard
         catalog:
-          - name: ApplicationOperationCount
-            type: counter
-            unit: "{operation}"
-            description: Total business operations handled by the application.
-            dimensions: [operation, result]
-          - name: ApplicationOperationDuration
+          - name: http.server.request.duration
             type: histogram
-            unit: ms
-            description: End-to-end application operation latency, emitted as a histogram so dashboards can derive p95 and p99.
-            dimensions: [operation]
-          - name: ApplicationOperationErrors
-            type: counter
-            unit: "{error}"
-            description: Application operations that ended in failure.
-            dimensions: [operation]
+            unit: s
+            description: HTTP server request duration emitted by OpenTelemetry instrumentation.
+            dimensions: [http.route, http.request.method, http.response.status_code]
+          - name: http.client.request.duration
+            type: histogram
+            unit: s
+            description: HTTP client request duration emitted by OpenTelemetry instrumentation.
+            dimensions: [server.address, http.request.method, http.response.status_code]
       logs:
         enabled: true
         ingestion: collector
@@ -73,7 +68,7 @@ spec:
         - name: crm-search-errors
           summary: CRM search errors above threshold.
           severity: medium
-          condition: sum(ApplicationOperationErrors) > 5
+          condition: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) > 0.05
           for: 10m
     slos:
       enabled: true

@@ -213,7 +213,7 @@ runs:
           exit 1
         fi
 
-        if [ "$INSTRUMENTATION_MODE" != "code" ] && [ "$INSTRUMENTATION_MODE" != "adot_layer" ]; then
+        if [ "$GENERATE_BINDINGS" = "true" ] && [ "$INSTRUMENTATION_MODE" != "code" ] && [ "$INSTRUMENTATION_MODE" != "adot_layer" ]; then
           echo "instrumentation_mode must be one of: code, adot_layer." >&2
           exit 1
         fi
@@ -587,7 +587,7 @@ runs:
         SERVICE_NAME: ${{ steps.dashboard-context.outputs.service_name }}
         SERVICE_NAMESPACE: ${{ steps.dashboard-context.outputs.service_namespace }}
         DEPLOYMENT_ENVIRONMENT: ${{ steps.dashboard-context.outputs.deployment_environment }}
-        TEMPLATE_PATH: ${{ steps.context.outputs.platform_repo_path }}/infra/observability-suite/grafana-dashboard.json.tftpl
+        TEMPLATE_DIR: ${{ steps.context.outputs.platform_repo_path }}/infra/observability-suite
         DASHBOARD_PAYLOAD_PATH: ${{ github.workspace }}/generated/workload-grafana-dashboard-request.json
       run: |
         set -euo pipefail
@@ -604,41 +604,35 @@ runs:
         python3 - <<'PY'
         import json
         import os
-        import re
         from pathlib import Path
 
-        template = Path(os.environ["TEMPLATE_PATH"]).read_text()
-        rendered = template.replace("${dashboard_uid}", os.environ["DASHBOARD_UID"])
-        rendered = rendered.replace("${dashboard_title}", os.environ["DASHBOARD_TITLE"])
+        template_by_preset = {
+            "serverless-api": "grafana-dashboard.json.tftpl",
+            "serverless-api-async-workflow": "grafana-dashboard.json.tftpl",
+            "monolith-business-app": "grafana-dashboard-monolith-business-app.json.tftpl",
+        }
+        preset = os.environ["DASHBOARD_PRESET"]
+        template_name = template_by_preset.get(preset)
+        if not template_name:
+            raise SystemExit(f"Unsupported dashboard preset for Grafana publication: {preset}")
+
+        template = (Path(os.environ["TEMPLATE_DIR"]) / template_name).read_text()
+        replacements = {
+            "${dashboard_uid}": os.environ["DASHBOARD_UID"],
+            "${dashboard_title}": os.environ["DASHBOARD_TITLE"],
+            "${service_name}": os.environ["SERVICE_NAME"],
+            "${service_namespace}": os.environ["SERVICE_NAMESPACE"],
+            "${deployment_environment}": os.environ["DEPLOYMENT_ENVIRONMENT"],
+        }
+        rendered = template
+        for placeholder, value in replacements.items():
+            rendered = rendered.replace(placeholder, value)
         dashboard = json.loads(rendered)
 
         tags = dashboard.setdefault("tags", [])
         for tag in ["idp-managed", os.environ["DASHBOARD_PRESET"], os.environ["SERVICE_NAME"], os.environ["SERVICE_NAMESPACE"]]:
             if tag and tag not in tags:
                 tags.append(tag)
-
-        label_map = {
-            "service_name": os.environ["SERVICE_NAME"],
-            "service_namespace": os.environ["SERVICE_NAMESPACE"],
-            "deployment_environment": os.environ["DEPLOYMENT_ENVIRONMENT"],
-        }
-        label_parts = [f'{key}="{value}"' for key, value in label_map.items() if value]
-        label_filter = ""
-        if label_parts:
-            label_filter = "," + ",".join(label_parts)
-
-        selector_pattern = re.compile(r'\{__name__=~"([^"]+)"\}')
-
-        def patch_expr(expr: str) -> str:
-            if not label_filter or "service_name=" in expr:
-                return expr
-            return selector_pattern.sub(lambda m: '{__name__=~"' + m.group(1) + '"' + label_filter + '}', expr)
-
-        for panel in dashboard.get("panels", []):
-            for target in panel.get("targets", []):
-                expr = target.get("expr")
-                if isinstance(expr, str):
-                    target["expr"] = patch_expr(expr)
 
         payload = {
             "dashboard": dashboard,

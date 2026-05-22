@@ -85,6 +85,40 @@ func TestValidateContractRejectsUnknownDashboardPreset(t *testing.T) {
 	}
 }
 
+func TestValidateContractAcceptsMonolithOtelMetrics(t *testing.T) {
+	t.Parallel()
+
+	contract := validContract()
+	contract.Spec.Service.Name = "order-satellite-service"
+	contract.Spec.Service.Runtime = "jvm"
+	contract.Spec.Service.Language = "java"
+	contract.Spec.Service.Framework = "micronaut"
+	contract.Spec.Telemetry.ResourceAttributes = map[string]string{
+		"service.name":           "order-satellite-service",
+		"service.namespace":      "observability-demo",
+		"deployment.environment": "dev",
+	}
+	contract.Spec.Telemetry.Signals.Metrics.Catalog = []v1alpha1.MetricSpec{
+		{
+			Name:        "http.server.request.duration",
+			Type:        "histogram",
+			Unit:        "s",
+			Description: "HTTP server request duration.",
+		},
+		{
+			Name:        "http.client.request.duration",
+			Type:        "histogram",
+			Unit:        "s",
+			Description: "HTTP client request duration.",
+		},
+	}
+	contract.Spec.Capabilities.Dashboards.Preset = "monolith-business-app"
+
+	if err := ValidateContract(contract); err != nil {
+		t.Fatalf("expected monolith OTEL metrics to be valid, got %v", err)
+	}
+}
+
 func validContract() *v1alpha1.ObservabilityContract {
 	return &v1alpha1.ObservabilityContract{
 		APIVersion: "observability.platform/v1alpha1",

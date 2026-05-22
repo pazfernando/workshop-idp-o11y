@@ -59,7 +59,7 @@ The catalog intentionally separates workload metrics from runtime metrics.
 - `serverless-api-async-workflow` extends the serverless API preset with worker-oriented operation throughput, duration, and error metrics so a single workload contract can cover API Lambda entrypoints plus asynchronous Lambda processing stages
 - `kubernetes-http-service` keeps contract metrics centered on request throughput, latency, and errors, while recommending CPU, memory, and pressure metrics at pod or container level; request latency histograms are intended to back percentile views such as `p95` and `p99`
 - `distributed-service` extends the contract metric set to include outbound dependency call metrics because dependency behavior is usually part of the service reliability surface; both inbound and outbound duration histograms are good candidates for `p95` and `p99`
-- `monolith-business-app` keeps contract metrics centered on application operations while recommending process-level CPU, memory, and thread metrics for runtime health; operation duration histograms can also support `p95` and `p99` when the backend exposes histogram quantiles
+- `monolith-business-app` keeps contract metrics centered on standard OpenTelemetry HTTP server/client duration histograms while recommending JVM runtime metrics for CPU, memory, and class loading; request counts, error rates, and latency percentiles are derived from those histograms in the dashboard
 
 This is deliberate:
 

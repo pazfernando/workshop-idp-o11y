@@ -91,6 +91,7 @@ Effective in validation, planning, or AWS Lambda bindings today:
 - signal backend classes
 - metrics catalog entries that belong to a supported dashboard preset
 - dashboards, alerts, SLO, and retention intent at planning level
+- managed-suite Grafana dashboard publication for supported workload presets such as serverless API and JVM/HTTP monoliths
 
 Currently more declarative than operational in this repository:
 

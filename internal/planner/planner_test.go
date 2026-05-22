@@ -1,6 +1,10 @@
 package planner
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	v1alpha1 "github.com/example/workshop-iidp-o11y/internal/api/v1alpha1"
@@ -43,6 +47,59 @@ func TestBuildIncludesPresetMetricSupportMetadata(t *testing.T) {
 	}
 }
 
+func TestBuildAssignsMonolithDashboardClass(t *testing.T) {
+	t.Parallel()
+
+	plan, err := Build(validMonolithContract())
+	if err != nil {
+		t.Fatalf("build plan: %v", err)
+	}
+
+	if classByName(plan, "aws-monolith-business-app-observability") == nil {
+		t.Fatalf("expected monolith dashboard class, got %v", plan.Classes)
+	}
+	if classByName(plan, "aws-serverless-api-observability") != nil {
+		t.Fatalf("did not expect serverless dashboard class for monolith preset")
+	}
+}
+
+func TestMonolithDashboardTemplateRendersServiceScopedQueries(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "infra", "observability-suite", "grafana-dashboard-monolith-business-app.json.tftpl")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read dashboard template: %v", err)
+	}
+
+	rendered := strings.NewReplacer(
+		"${dashboard_uid}", "test-monolith",
+		"${dashboard_title}", "Test Monolith",
+		"${service_name}", "order-satellite-service",
+		"${service_namespace}", "observability-demo",
+		"${deployment_environment}", "dev",
+	).Replace(string(raw))
+
+	if strings.Contains(rendered, "aws_lambda_function_name") {
+		t.Fatalf("monolith dashboard must not contain Lambda function filters")
+	}
+
+	var dashboard map[string]any
+	if err := json.Unmarshal([]byte(rendered), &dashboard); err != nil {
+		t.Fatalf("dashboard template did not render valid JSON: %v", err)
+	}
+
+	for _, query := range dashboardQueries(dashboard) {
+		if strings.Contains(query, "{__name__=~") {
+			for _, label := range []string{`service_name="order-satellite-service"`, `service_namespace="observability-demo"`, `deployment_environment="dev"`} {
+				if !strings.Contains(query, label) {
+					t.Fatalf("query missing label %s: %s", label, query)
+				}
+			}
+		}
+	}
+}
+
 func capabilityByName(plan *ProvisioningPlan, name string) *CapabilityPlan {
 	for i := range plan.Capabilities {
 		if plan.Capabilities[i].Name == name {
@@ -50,6 +107,36 @@ func capabilityByName(plan *ProvisioningPlan, name string) *CapabilityPlan {
 		}
 	}
 	return nil
+}
+
+func classByName(plan *ProvisioningPlan, name string) *ClassPlan {
+	for i := range plan.Classes {
+		if plan.Classes[i].Name == name {
+			return &plan.Classes[i]
+		}
+	}
+	return nil
+}
+
+func dashboardQueries(value any) []string {
+	var queries []string
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if (key == "expr" || key == "query") && nested != nil {
+				if query, ok := nested.(string); ok {
+					queries = append(queries, query)
+					continue
+				}
+			}
+			queries = append(queries, dashboardQueries(nested)...)
+		}
+	case []any:
+		for _, nested := range typed {
+			queries = append(queries, dashboardQueries(nested)...)
+		}
+	}
+	return queries
 }
 
 func validContract() *v1alpha1.ObservabilityContract {
@@ -121,4 +208,25 @@ func validContract() *v1alpha1.ObservabilityContract {
 			},
 		},
 	}
+}
+
+func validMonolithContract() *v1alpha1.ObservabilityContract {
+	contract := validContract()
+	contract.Metadata.Name = "order-satellite-demo"
+	contract.Metadata.System = "order-processing-system"
+	contract.Spec.Service.Name = "order-satellite-service"
+	contract.Spec.Service.Runtime = "jvm"
+	contract.Spec.Service.Language = "java"
+	contract.Spec.Service.Framework = "micronaut"
+	contract.Spec.Telemetry.ResourceAttributes = map[string]string{
+		"service.name":           "order-satellite-service",
+		"service.namespace":      "observability-demo",
+		"deployment.environment": "dev",
+	}
+	contract.Spec.Telemetry.Signals.Metrics.Catalog = []v1alpha1.MetricSpec{
+		{Name: "http.server.request.duration", Type: "histogram", Unit: "s", Description: "HTTP server request duration."},
+		{Name: "http.client.request.duration", Type: "histogram", Unit: "s", Description: "HTTP client request duration."},
+	}
+	contract.Spec.Capabilities.Dashboards.Preset = "monolith-business-app"
+	return contract
 }

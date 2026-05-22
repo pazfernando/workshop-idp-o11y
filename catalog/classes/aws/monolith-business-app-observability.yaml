@@ -1,0 +1,17 @@
+apiVersion: observability.platform/v1alpha1
+kind: PlatformClass
+metadata:
+  name: aws-monolith-business-app-observability
+  layer: catalog
+spec:
+  target: aws
+  runtime: jvm
+  purpose: Starter class for dashboards and managed-suite assets around JVM HTTP monolith workloads on AWS runtimes such as ECS/Fargate.
+  contractMapping:
+    dashboardPresets:
+      - monolith-business-app
+  templates:
+    grafanaStarterDashboard: assets/collector/managed-suite/grafana-dashboard-monolith-business-app.json.tftpl
+  notes:
+    - The Grafana starter dashboard is filtered by OpenTelemetry resource attributes rather than AWS Lambda function names.
+    - JVM runtime metrics are treated as dashboard runtime coverage, not caller-authored contract metrics.
