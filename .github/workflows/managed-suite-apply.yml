@@ -14,9 +14,8 @@ on:
         default: us-east-1
         type: string
       subnet_id:
-        description: Optional subnet ID. Leave empty to auto-select a public subnet
-        required: false
-        default: ""
+        description: Subnet ID where the managed suite will be deployed
+        required: true
         type: string
       instance_type:
         description: EC2 instance type

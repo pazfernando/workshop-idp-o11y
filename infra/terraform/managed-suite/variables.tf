@@ -13,11 +13,11 @@ variable "name" {
 variable "vpc_id" {
   description = "VPC ID where the managed observability suite will be deployed."
   type        = string
-  default     = "vpc-095bf825560175dae"
+  default     = ""
 }
 
 variable "subnet_id" {
-  description = "Optional subnet ID. If empty, Terraform selects the first public subnet, or the first subnet if no public subnet exists."
+  description = "Subnet ID where the managed suite will be deployed. If empty, vpc_id must be provided so Terraform can auto-select a public subnet."
   type        = string
   default     = ""
 }

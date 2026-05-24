@@ -3,6 +3,7 @@ provider "aws" {
 }
 
 data "aws_subnets" "public" {
+  count = trim(var.vpc_id, " ") != "" ? 1 : 0
   filter {
     name   = "vpc-id"
     values = [var.vpc_id]
@@ -14,16 +15,23 @@ data "aws_subnets" "public" {
 }
 
 data "aws_subnets" "all" {
+  count = trim(var.vpc_id, " ") != "" ? 1 : 0
   filter {
     name   = "vpc-id"
     values = [var.vpc_id]
   }
 }
 
+data "aws_subnet" "explicit" {
+  count = trim(var.subnet_id, " ") != "" ? 1 : 0
+  id    = trim(var.subnet_id, " ")
+}
+
 locals {
-  selected_subnet_id = trim(var.subnet_id, " ") != "" ? trim(var.subnet_id, " ") : (
-    length(data.aws_subnets.public.ids) > 0 ? sort(data.aws_subnets.public.ids)[0] : (
-      length(data.aws_subnets.all.ids) > 0 ? sort(data.aws_subnets.all.ids)[0] : ""
+  resolved_vpc_id    = length(data.aws_subnet.explicit) > 0 ? data.aws_subnet.explicit[0].vpc_id : var.vpc_id
+  selected_subnet_id = length(data.aws_subnet.explicit) > 0 ? data.aws_subnet.explicit[0].id : (
+    length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? sort(data.aws_subnets.public[0].ids)[0] : (
+      length(data.aws_subnets.all) > 0 && length(data.aws_subnets.all[0].ids) > 0 ? sort(data.aws_subnets.all[0].ids)[0] : ""
     )
   )
 }
@@ -105,7 +113,7 @@ locals {
 resource "aws_security_group" "managed_suite" {
   name        = "${var.name}-sg"
   description = "Security group for the platform-managed observability suite."
-  vpc_id      = var.vpc_id
+  vpc_id      = local.resolved_vpc_id
 
   egress {
     from_port   = 0
